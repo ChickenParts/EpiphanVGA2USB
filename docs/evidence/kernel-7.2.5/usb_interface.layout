@@ -36,4 +36,3 @@ struct usb_interface {
 	/* member types with holes: 1, total: 1 */
 	/* last cacheline: 16 bytes */
 };
-

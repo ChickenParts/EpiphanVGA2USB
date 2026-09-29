@@ -122,4 +122,3 @@ struct mm_struct {
 	/* member types with holes: 1, total: 4 */
 	/* paddings: 1, sum paddings: 36 */
 };
-

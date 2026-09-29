@@ -115,4 +115,3 @@ struct usb_device {
 	/* bit_padding: 15 bits */
 	/* last cacheline: 40 bytes */
 };
-

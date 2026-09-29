@@ -74,4 +74,3 @@ struct device {
 	/* paddings: 3, sum paddings: 15 */
 	/* last cacheline: 24 bytes */
 };
-

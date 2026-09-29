@@ -57,4 +57,3 @@ struct video_device {
 	/* paddings: 2, sum paddings: 8 */
 	/* last cacheline: 48 bytes */
 };
-

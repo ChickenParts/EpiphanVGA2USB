@@ -428,4 +428,3 @@ struct task_struct {
 	/* paddings: 7, sum paddings: 53 */
 	/* forced alignments: 2, forced holes: 2, sum forced holes: 63 */
 } __attribute__((__aligned__(64)));
-

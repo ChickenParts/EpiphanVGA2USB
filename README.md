@@ -16,11 +16,13 @@ core with incompatible kernel structure accesses.
 
 Implemented: hash-pinned firmware extraction, descriptor inspection, RAM-only
 bootstrap, and an evidence-backed sync-status query. Offline decoder and
-bootstrap transfer/failure-path checks pass; physical startup is not yet verified.
+bootstrap transfer/failure-path checks pass. RAM startup and a no-signal status read
+are verified on the test host; frame capture is still in progress.
 
 See [the design](docs/design.md), [the implementation plan](docs/plan.md),
 [kernel compatibility evidence](docs/kernel-abi.md), and
-[firmware provenance](firmware/README.md).
+[firmware provenance](firmware/README.md), [frame-format notes](docs/protocol/frames.md),
+and [hardware startup evidence](docs/hardware/startup-2026-09-28.md).
 
 ## Build and checks
 
