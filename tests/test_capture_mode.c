@@ -27,6 +27,19 @@ int main(void)
     memcpy(invalid, measured720, sizeof invalid);
     invalid[3] = 0xc3; /* Different total vertical line count. */
     assert(v2u_capture_mode(invalid, V2U_MODE_AUTO, command, &layout) < 0);
+    assert(v2u_capture_mode(measured720, V2U_MODE_AUTO, command, &layout) == 0);
+    const unsigned phases[] = {4,5,8,10,16,20,25,40,50,80,100,200};
+    for (size_t i=0;i<sizeof phases/sizeof phases[0];++i) {
+        uint8_t before[31]; memcpy(before,command,31);
+        assert(v2u_capture_next_phase(command,&layout)==0);
+        assert(layout.vertical_phases==phases[i] && layout.wire_bytes==614304);
+        assert(command[18]==0 && command[19]==phases[i] && command[25]==phases[i]);
+        unsigned rows=400/phases[i]; assert(command[20]==rows/256 && command[21]==rows%256);
+        for (size_t j=0;j<31;++j)
+            if (j!=18 && j!=19 && j!=20 && j!=21 && j!=25) assert(command[j]==before[j]);
+    }
+    uint8_t before[31]; memcpy(before,command,31);
+    assert(v2u_capture_next_phase(command,&layout)<0 && memcmp(before,command,31)==0);
     puts("Capture mode: original ADC overrides, real text-mode status, geometry rejection passed");
     return 0;
 }

@@ -29,14 +29,14 @@ consume captured frames. Ruby provides reproducible extraction and offline check
   `docs/protocol/frames.md`.
 - [x] Add offline packet and synthetic-frame tests; implement only established
   fields, including bounds and exact transfer-length checks.
-- [ ] Verify no-signal handling then physical PC text/graphics frames. Compare output
-  size, colors and orientation with the source screen.
+- [x] Verify no-signal handling and physical PC text frames; inspect size, colors
+  and orientation. Graphics modes remain a separate hardware check.
 
 ## Phase 3: Repeatable ChickenParts use
 
-- [ ] Show live video on the test host's monitor and verify the displayed capture source.
+- [x] Show live video on the test host's monitor and verify the displayed capture source.
 - [ ] Exercise disconnect/reconnect and document the recovery commands.
-- [ ] Publish source and verified RE documentation to the user's GitHub repository.
+- [x] Publish source and verified RE documentation to the user's GitHub repository.
 
 Each phase reports its completed checks and remaining limits. The capture phases
 depend on recovered protocol evidence and actual source video; they are not implied

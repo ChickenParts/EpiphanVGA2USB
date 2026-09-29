@@ -26,3 +26,22 @@ int v2u_capture_mode(const uint8_t status[10], enum v2u_mode requested,
     command[2] = status[8] & 3;
     return 0;
 }
+
+int v2u_capture_next_phase(uint8_t command[31], struct v2u_home_layout *layout)
+{
+    if (!command || !layout) return -1;
+    unsigned next = layout->vertical_phases + 1;
+    while (next < 255 && layout->height % next) ++next;
+    if (next >= 255) return -1;
+    struct v2u_home_layout updated;
+    if (v2u_home_layout(layout->width, layout->height, next,
+                        layout->horizontal_phases, &updated) < 0) return -1;
+    unsigned rows = layout->height / next;
+    command[18] = (uint8_t)(next >> 8);
+    command[19] = (uint8_t)next;
+    command[20] = (uint8_t)(rows >> 8);
+    command[21] = (uint8_t)rows;
+    command[25] = (uint8_t)next;
+    *layout = updated;
+    return 0;
+}

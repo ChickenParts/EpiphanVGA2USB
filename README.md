@@ -9,20 +9,19 @@ module or restarting the host is unnecessary.
 
 ## Current status
 
-Reverse engineering and capture bringup are in progress. Live capture is **not yet hardware-qualified**.
-The original model differs from VGA2USB LR; LR firmware and setup requests must
-not be sent to it. The vendor's modern Linux wrapper still contains an old binary
-core with incompatible kernel structure accesses.
+Physical 720×400 text capture and a full-screen live mirror are verified on the test host
+without a host reboot. The source is currently at a Phoenix BIOS POST prompt.
 
-Implemented: hash-pinned firmware extraction, descriptor inspection, RAM-only
-bootstrap, and an evidence-backed sync-status query. Offline decoder and
-bootstrap transfer/failure-path checks pass. RAM startup and a no-signal status read
-are verified on the test host; frame capture is still in progress.
+Implemented: hash-pinned firmware extraction, RAM-only bootstrap, sync-status
+query, original RGB565 HOME decoder, row-aligned asynchronous USB collection,
+and evidence-backed short-frame recovery. Offline checks include failure paths
+and concatenated PPM output. The original model differs from VGA2USB LR; their
+firmware and setup requests are not interchangeable.
 
 See [the design](docs/design.md), [the implementation plan](docs/plan.md),
-[kernel compatibility evidence](docs/kernel-abi.md), and
-[firmware provenance](firmware/README.md), [frame-format notes](docs/protocol/frames.md),
-and [hardware startup evidence](docs/hardware/startup-2026-09-28.md).
+[kernel compatibility evidence](docs/kernel-abi.md),
+[firmware provenance](firmware/README.md), and
+[physical capture evidence](docs/hardware/capture-2026-09-28.md).
 
 ## Build and checks
 
@@ -38,21 +37,22 @@ ninja test driver firmware-audit
 `--bootstrap` uploads only the generated original-model RAM image. `--sync` reads
 the documented 10-byte status response after startup. Both need USB read/write
 access. `--port BUS-PORT[.PORT]` restricts operations to one physical USB path.
-These are bringup commands; they do not yet capture or display video.
+The capture commands below produce screenshots or a continuous stream.
 
 Vendor firmware remains vendor-owned. Extraction tools and manifests will make
 it reproducible from an identified official package; generated binary data lives
 under the ignored build directory.
 
-## Capture prototype
+## Capture and live viewing
 
-The native capture path queues bulk IN before the documented B4 request and
-unpacks the original HOME RGB565 row order. These commands are implemented and
-have offline request/decoder checks; real-frame qualification is pending:
+The native capture path queues the first bulk read before B4, then collects the
+remaining row-aligned requests and unpacks HOME RGB565 row order. Short frames
+are discarded; after three consecutive incomplete frames the phase count advances
+to the next divisor of the source height. Successful tuning persists in a stream.
 
 ```sh
 sudo ./build/vga2usb-native --capture snapshot.ppm --port 1-12.2
-sudo ./build/vga2usb-native --stream --port 1-12.2 | ffplay -f image2pipe -vcodec ppm -i -
+sudo ./build/vga2usb-native --stream --port 1-12.2 | ffplay -fs -f image2pipe -vcodec ppm -framerate 14 -vf setdar=4/3 -i -
 ```
 
 Auto mode currently accepts only the uniquely identified 720×400 text timing with
@@ -66,3 +66,14 @@ rejects absent/unsupported timing and short or unexpected frame lengths.
 defaults, the B0 skip, and the complete default B4 templates.
 [Mode parameters](docs/protocol/mode-parameters.md) explains the vendor's VESA
 matching and the unresolved or format-dependent cases.
+
+Only one process may claim the capture interface. Stop the viewer before taking
+an independent native snapshot; desktop screenshots can be taken while viewing.
+PNG conversion uses `ffmpeg -i snapshot.ppm -frames:v 1 snapshot.png`.
+
+[Receive transport](docs/protocol/receive-transport.md) and
+[HOME recovery](docs/protocol/home-recovery.md) record the recovered USB scheduling
+and phase-search evidence. Only 720×400 is physically qualified so far.
+For now, reconnect recovery is manual: stop the viewer, reconnect the USB device,
+inspect it, run `--bootstrap` if needed, and start the viewer again. This sequence
+has not yet been exercised as a hardware recovery test.
