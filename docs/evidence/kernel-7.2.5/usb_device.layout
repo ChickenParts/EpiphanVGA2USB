@@ -1,0 +1,118 @@
+struct usb_device {
+	int                        devnum;               /*     0     4 */
+	char                       devpath[16];          /*     4    16 */
+	u32                        route;                /*    20     4 */
+	enum usb_device_state      state;                /*    24     4 */
+	enum usb_device_speed      speed;                /*    28     4 */
+	unsigned int               rx_lanes;             /*    32     4 */
+	unsigned int               tx_lanes;             /*    36     4 */
+	enum usb_ssp_rate          ssp_rate;             /*    40     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct usb_tt *            tt;                   /*    48     8 */
+	int                        ttport;               /*    56     4 */
+	unsigned int               toggle[2];            /*    60     8 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	/* --- cacheline 1 boundary (64 bytes) was 8 bytes ago --- */
+	struct usb_device *        parent;               /*    72     8 */
+	struct usb_bus *           bus;                  /*    80     8 */
+	struct usb_host_endpoint   ep0;                  /*    88    88 */
+
+	/* XXX last struct has 4 bytes of padding, 1 hole */
+
+	/* --- cacheline 2 boundary (128 bytes) was 48 bytes ago --- */
+	struct device              dev;                  /*   176   792 */
+
+	/* XXX last struct has 1 hole */
+
+	/* --- cacheline 15 boundary (960 bytes) was 8 bytes ago --- */
+	struct usb_device_descriptor descriptor;         /*   968    18 */
+
+	/* XXX 6 bytes hole, try to pack */
+
+	struct usb_host_bos *      bos;                  /*   992     8 */
+	struct usb_host_config *   config;               /*  1000     8 */
+	struct usb_host_config *   actconfig;            /*  1008     8 */
+	struct usb_host_endpoint * ep_in[16];            /*  1016   128 */
+	/* --- cacheline 17 boundary (1088 bytes) was 56 bytes ago --- */
+	struct usb_host_endpoint * ep_out[16];           /*  1144   128 */
+	/* --- cacheline 19 boundary (1216 bytes) was 56 bytes ago --- */
+	char * *                   rawdescriptors;       /*  1272     8 */
+	/* --- cacheline 20 boundary (1280 bytes) --- */
+	short unsigned int         bus_mA;               /*  1280     2 */
+	u8                         portnum;              /*  1282     1 */
+	u8                         level;                /*  1283     1 */
+	u8                         devaddr;              /*  1284     1 */
+
+	/* Bitfield combined with previous fields */
+
+	unsigned int               can_submit:1;         /*  1284: 8  4 */
+	unsigned int               persist_enabled:1;    /*  1284: 9  4 */
+	unsigned int               reset_in_progress:1;  /*  1284:10  4 */
+	unsigned int               have_langid:1;        /*  1284:11  4 */
+	unsigned int               authorized:1;         /*  1284:12  4 */
+	unsigned int               authenticated:1;      /*  1284:13  4 */
+	unsigned int               lpm_capable:1;        /*  1284:14  4 */
+	unsigned int               lpm_devinit_allow:1;  /*  1284:15  4 */
+	unsigned int               usb2_hw_lpm_capable:1; /*  1284:16  4 */
+	unsigned int               usb2_hw_lpm_besl_capable:1; /*  1284:17  4 */
+	unsigned int               usb2_hw_lpm_enabled:1; /*  1284:18  4 */
+	unsigned int               usb2_hw_lpm_allowed:1; /*  1284:19  4 */
+	unsigned int               usb3_lpm_u1_enabled:1; /*  1284:20  4 */
+	unsigned int               usb3_lpm_u2_enabled:1; /*  1284:21  4 */
+
+	/* XXX 10 bits hole, try to pack */
+
+	int                        string_langid;        /*  1288     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	char *                     product;              /*  1296     8 */
+	char *                     manufacturer;         /*  1304     8 */
+	char *                     serial;               /*  1312     8 */
+	struct list_head           filelist;             /*  1320    16 */
+	int                        maxchild;             /*  1336     4 */
+	u32                        quirks;               /*  1340     4 */
+	/* --- cacheline 21 boundary (1344 bytes) --- */
+	atomic_t                   urbnum;               /*  1344     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	long unsigned int          active_duration;      /*  1352     8 */
+	long unsigned int          connect_time;         /*  1360     8 */
+	unsigned int               do_remote_wakeup:1;   /*  1368: 0  4 */
+	unsigned int               reset_resume:1;       /*  1368: 1  4 */
+	unsigned int               port_is_suspended:1;  /*  1368: 2  4 */
+	unsigned int               offload_pm_locked:1;  /*  1368: 3  4 */
+
+	/* XXX 28 bits hole, try to pack */
+
+	int                        offload_usage;        /*  1372     4 */
+	spinlock_t                 offload_lock;         /*  1376     4 */
+	enum usb_link_tunnel_mode  tunnel_mode;          /*  1380     4 */
+	struct device_link *       usb4_link;            /*  1384     8 */
+	int                        slot_id;              /*  1392     4 */
+	struct usb2_lpm_parameters l1_params;            /*  1396     8 */
+	struct usb3_lpm_parameters u1_params;            /*  1404    16 */
+	/* --- cacheline 22 boundary (1408 bytes) was 12 bytes ago --- */
+	struct usb3_lpm_parameters u2_params;            /*  1420    16 */
+	unsigned int               lpm_disable_count;    /*  1436     4 */
+	u16                        hub_delay;            /*  1440     2 */
+
+	/* Bitfield combined with previous fields */
+
+	unsigned int               use_generic_driver:1; /*  1440:16  4 */
+
+	/* size: 1448, cachelines: 23, members: 65 */
+	/* sum members: 1413, holes: 5, sum holes: 22 */
+	/* sum bitfield members: 19 bits, bit holes: 2, sum bit holes: 38 bits */
+	/* padding: 4 */
+	/* member types with holes: 2, total: 2 */
+	/* paddings: 1, sum paddings: 4 */
+	/* bit_padding: 15 bits */
+	/* last cacheline: 40 bytes */
+};
+

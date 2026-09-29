@@ -1,0 +1,77 @@
+struct device {
+	struct kobject             kobj;                 /*     0    64 */
+
+	/* XXX last struct has 27 bits of padding */
+
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	struct device *            parent;               /*    64     8 */
+	struct device_private *    p;                    /*    72     8 */
+	const char  *              init_name;            /*    80     8 */
+	const struct device_type  * type;                /*    88     8 */
+	const struct bus_type  *   bus;                  /*    96     8 */
+	struct device_driver *     driver;               /*   104     8 */
+	void *                     platform_data;        /*   112     8 */
+	void *                     driver_data;          /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	struct {
+		const char  *      name;                 /*   128     8 */
+		spinlock_t         lock;                 /*   136     4 */
+	} driver_override;                               /*   128    16 */
+
+	/* XXX last struct has 4 bytes of padding */
+
+	struct mutex               mutex;                /*   144    24 */
+	struct dev_links_info      links;                /*   168    56 */
+
+	/* XXX last struct has 4 bytes of padding */
+
+	/* --- cacheline 3 boundary (192 bytes) was 32 bytes ago --- */
+	struct dev_pm_info         power;                /*   224   336 */
+
+	/* XXX last struct has 7 bytes of padding, 7 bits of padding, 3 holes, 2 bit holes */
+
+	/* --- cacheline 8 boundary (512 bytes) was 48 bytes ago --- */
+	struct dev_pm_domain *     pm_domain;            /*   560     8 */
+	struct em_perf_domain *    em_pd;                /*   568     8 */
+	/* --- cacheline 9 boundary (576 bytes) --- */
+	struct dev_pin_info *      pins;                 /*   576     8 */
+	struct dev_msi_info        msi;                  /*   584    16 */
+	const struct dma_map_ops  * dma_ops;             /*   600     8 */
+	u64 *                      dma_mask;             /*   608     8 */
+	u64                        coherent_dma_mask;    /*   616     8 */
+	u64                        bus_dma_limit;        /*   624     8 */
+	const struct bus_dma_region  * dma_range_map;    /*   632     8 */
+	/* --- cacheline 10 boundary (640 bytes) --- */
+	struct device_dma_parameters * dma_parms;        /*   640     8 */
+	struct list_head           dma_pools;            /*   648    16 */
+	struct cma *               cma_area;             /*   664     8 */
+	struct io_tlb_mem *        dma_io_tlb_mem;       /*   672     8 */
+	struct dev_archdata        archdata;             /*   680     0 */
+	struct device_node *       of_node;              /*   680     8 */
+	struct fwnode_handle *     fwnode;               /*   688     8 */
+	int                        numa_node;            /*   696     4 */
+	dev_t                      devt;                 /*   700     4 */
+	/* --- cacheline 11 boundary (704 bytes) --- */
+	u32                        id;                   /*   704     4 */
+	spinlock_t                 devres_lock;          /*   708     4 */
+	struct list_head           devres_head;          /*   712    16 */
+	const struct class  *      class;                /*   728     8 */
+	const struct attribute_group  * * groups;        /*   736     8 */
+	void                       (*release)(struct device *); /*   744     8 */
+	struct iommu_group *       iommu_group;          /*   752     8 */
+	struct dev_iommu *         iommu;                /*   760     8 */
+	/* --- cacheline 12 boundary (768 bytes) --- */
+	struct device_physical_location * physical_location; /*   768     8 */
+	enum device_removable      removable;            /*   776     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	long unsigned int          flags[1];             /*   784     8 */
+
+	/* size: 792, cachelines: 13, members: 42 */
+	/* sum members: 788, holes: 1, sum holes: 4 */
+	/* member types with holes: 1, total: 3, bit holes: 1, total: 2, bit paddings: 2, total: 34 bits */
+	/* paddings: 3, sum paddings: 15 */
+	/* last cacheline: 24 bytes */
+};
+

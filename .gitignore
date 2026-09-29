@@ -1,0 +1,5 @@
+/build/
+/.worktrees/
+/vendor/
+/.ninja_log
+/.ninja_deps

@@ -1,0 +1,39 @@
+struct usb_interface {
+	struct usb_host_interface * altsetting;          /*     0     8 */
+	struct usb_host_interface * cur_altsetting;      /*     8     8 */
+	unsigned int               num_altsetting;       /*    16     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct usb_interface_assoc_descriptor * intf_assoc; /*    24     8 */
+	int                        minor;                /*    32     4 */
+	enum usb_interface_condition condition;          /*    36     4 */
+	unsigned int               sysfs_files_created:1; /*    40: 0  4 */
+	unsigned int               ep_devs_created:1;    /*    40: 1  4 */
+	unsigned int               unregistering:1;      /*    40: 2  4 */
+	unsigned int               needs_remote_wakeup:1; /*    40: 3  4 */
+	unsigned int               needs_altsetting0:1;  /*    40: 4  4 */
+	unsigned int               needs_binding:1;      /*    40: 5  4 */
+	unsigned int               resetting_device:1;   /*    40: 6  4 */
+	unsigned int               authorized:1;         /*    40: 7  4 */
+
+	/* XXX 24 bits hole, try to pack */
+
+	enum usb_wireless_status   wireless_status;      /*    44     4 */
+	struct work_struct         wireless_status_work; /*    48    32 */
+	/* --- cacheline 1 boundary (64 bytes) was 16 bytes ago --- */
+	struct device              dev;                  /*    80   792 */
+
+	/* XXX last struct has 1 hole */
+
+	/* --- cacheline 13 boundary (832 bytes) was 40 bytes ago --- */
+	struct device *            usb_dev;              /*   872     8 */
+	struct work_struct         reset_ws;             /*   880    32 */
+
+	/* size: 912, cachelines: 15, members: 19 */
+	/* sum members: 904, holes: 1, sum holes: 4 */
+	/* sum bitfield members: 8 bits, bit holes: 1, sum bit holes: 24 bits */
+	/* member types with holes: 1, total: 1 */
+	/* last cacheline: 16 bytes */
+};
+

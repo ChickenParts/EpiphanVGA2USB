@@ -1,0 +1,42 @@
+rule ruby_test
+  command = ruby tests/test_vendor_firmware.rb
+  description = Verify firmware decoder and input rejection
+  pool = console
+
+build test-firmware: ruby_test tests/test_vendor_firmware.rb
+
+rule compile_test
+  command = mkdir -p build && cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc tests/test_bootstrap.c src/bootstrap.c -o $out
+  description = Compile bootstrap failure-path checks
+
+build build/test-bootstrap: compile_test tests/test_bootstrap.c src/bootstrap.c src/bootstrap.h
+
+rule run_bootstrap_test
+  command = ./build/test-bootstrap
+  description = Verify RAM bootstrap transfer and failure handling
+  pool = console
+
+build test-bootstrap: run_bootstrap_test build/test-bootstrap
+build test: phony test-firmware test-bootstrap
+
+rule audit_firmware
+  command = ruby tools/extract_firmware.rb vendor/vga2usb_bins.o_shipped build/firmware
+  description = Extract and audit the pinned original VGA2USB firmware
+  pool = console
+
+build firmware-audit: audit_firmware tools/extract_firmware.rb tools/vendor_firmware.rb
+
+rule render_firmware
+  command = ruby tools/render_firmware.rb vendor/vga2usb_bins.o_shipped $out
+  description = Render hash-verified original-model RAM firmware
+
+build build/firmware.h: render_firmware vendor/vga2usb_bins.o_shipped tools/vendor_firmware.rb tools/render_firmware.rb
+
+rule compile_driver
+  command = cc -std=c11 -Wall -Wextra -Werror -g -Isrc -Ibuild src/main.c src/bootstrap.c $$(pkg-config --cflags --libs libusb-1.0) -o $out
+  description = Build native original VGA2USB bringup tool
+
+build build/vga2usb-native: compile_driver src/main.c src/bootstrap.c src/bootstrap.h build/firmware.h
+build driver: phony build/vga2usb-native
+
+default test

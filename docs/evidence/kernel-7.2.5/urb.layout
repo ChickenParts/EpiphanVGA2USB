@@ -1,0 +1,39 @@
+struct urb {
+	struct kref                kref;                 /*     0     4 */
+	int                        unlinked;             /*     4     4 */
+	void *                     hcpriv;               /*     8     8 */
+	atomic_t                   use_count;            /*    16     4 */
+	atomic_t                   reject;               /*    20     4 */
+	struct list_head           urb_list;             /*    24    16 */
+	struct list_head           anchor_list;          /*    40    16 */
+	struct usb_anchor *        anchor;               /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	struct usb_device *        dev;                  /*    64     8 */
+	struct usb_host_endpoint * ep;                   /*    72     8 */
+	unsigned int               pipe;                 /*    80     4 */
+	unsigned int               stream_id;            /*    84     4 */
+	int                        status;               /*    88     4 */
+	unsigned int               transfer_flags;       /*    92     4 */
+	void *                     transfer_buffer;      /*    96     8 */
+	dma_addr_t                 transfer_dma;         /*   104     8 */
+	struct scatterlist *       sg;                   /*   112     8 */
+	struct sg_table *          sgt;                  /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	int                        num_mapped_sgs;       /*   128     4 */
+	int                        num_sgs;              /*   132     4 */
+	u32                        transfer_buffer_length; /*   136     4 */
+	u32                        actual_length;        /*   140     4 */
+	unsigned char *            setup_packet;         /*   144     8 */
+	dma_addr_t                 setup_dma;            /*   152     8 */
+	int                        start_frame;          /*   160     4 */
+	int                        number_of_packets;    /*   164     4 */
+	int                        interval;             /*   168     4 */
+	int                        error_count;          /*   172     4 */
+	void *                     context;              /*   176     8 */
+	usb_complete_t             complete;             /*   184     8 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	struct usb_iso_packet_descriptor iso_frame_desc[]; /*   192     0 */
+
+	/* size: 192, cachelines: 3, members: 31 */
+};
+

@@ -1,0 +1,60 @@
+struct video_device {
+	struct media_entity        entity;               /*     0   120 */
+
+	/* XXX last struct has 4 bytes of padding, 2 holes */
+
+	/* --- cacheline 1 boundary (64 bytes) was 56 bytes ago --- */
+	struct media_intf_devnode * intf_devnode;        /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	struct media_pipeline      pipe;                 /*   128    40 */
+
+	/* XXX last struct has 4 bytes of padding, 1 hole */
+
+	const struct v4l2_file_operations  * fops;       /*   168     8 */
+	u32                        device_caps;          /*   176     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct device              dev;                  /*   184   792 */
+
+	/* XXX last struct has 1 hole */
+
+	/* --- cacheline 15 boundary (960 bytes) was 16 bytes ago --- */
+	struct cdev *              cdev;                 /*   976     8 */
+	struct v4l2_device *       v4l2_dev;             /*   984     8 */
+	struct device *            dev_parent;           /*   992     8 */
+	struct v4l2_ctrl_handler * ctrl_handler;         /*  1000     8 */
+	struct vb2_queue *         queue;                /*  1008     8 */
+	struct v4l2_prio_state *   prio;                 /*  1016     8 */
+	/* --- cacheline 16 boundary (1024 bytes) --- */
+	char                       name[64];             /*  1024    64 */
+	/* --- cacheline 17 boundary (1088 bytes) --- */
+	enum vfl_devnode_type      vfl_type;             /*  1088     4 */
+	enum vfl_devnode_direction vfl_dir;              /*  1092     4 */
+	int                        minor;                /*  1096     4 */
+	u16                        num;                  /*  1100     2 */
+
+	/* XXX 2 bytes hole, try to pack */
+
+	long unsigned int          flags;                /*  1104     8 */
+	int                        index;                /*  1112     4 */
+	spinlock_t                 fh_lock;              /*  1116     4 */
+	struct list_head           fh_list;              /*  1120    16 */
+	int                        dev_debug;            /*  1136     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	v4l2_std_id                tvnorms;              /*  1144     8 */
+	/* --- cacheline 18 boundary (1152 bytes) --- */
+	void                       (*release)(struct video_device *); /*  1152     8 */
+	const struct v4l2_ioctl_ops  * ioctl_ops;        /*  1160     8 */
+	long unsigned int          valid_ioctls[3];      /*  1168    24 */
+	struct mutex *             lock;                 /*  1192     8 */
+
+	/* size: 1200, cachelines: 19, members: 27 */
+	/* sum members: 1190, holes: 3, sum holes: 10 */
+	/* member types with holes: 3, total: 4 */
+	/* paddings: 2, sum paddings: 8 */
+	/* last cacheline: 48 bytes */
+};
+
