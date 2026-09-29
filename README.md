@@ -93,3 +93,7 @@ status. Only observed unavailable/changed timing causes source recovery; no elap
 capture deadline is imposed. Brief interruptions that return to identical timing
 between observations can still be missed. See the
 [restart investigation](docs/hardware/restart-2026-09-28.md).
+
+A later [viewer stall](docs/hardware/viewer-stall-2026-09-29.md) blocked
+the producer's output pipe even though USB remained connected. Restarting the
+viewer restored capture; its underlying cause remains unresolved.
