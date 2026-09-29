@@ -34,3 +34,22 @@ it cannot progress while a synchronous output write is blocked by a viewer.
 Next investigation should distinguish viewer pause/queue state, timestamp
 scheduling, and PPM parsing using controlled playback of complete frames with
 source interruptions. Do not infer a USB fault merely because the mirror freezes.
+
+## Subsequent tester-correlated reboot
+
+The tester then reported that reboots appeared to drop the signal. The new
+pipeline had delivered complete frames through 1024 before recording `Waiting
+for supported VGA signal`, `VGA signal returned`, and short-frame phase retries
+through V=5. The mirror was black again. The device remained connected.
+
+A separate GDB trace at approximately 05:16 UTC located this stall inside the
+synchronous B1 `libusb_control_transfer` in `source_matches`, called from the
+pending-read observation path in `capture_wire`. Thus this later stall was not
+the output backpressure observed earlier. The observation poll itself has no
+deadline, and its status query also has no USB deadline. An uncompleted control
+query can therefore prevent the observation loop from progressing.
+
+The tester's observation and the absence/return messages establish the reboot
+trigger for this incident. They do not explain why the B1 control query stopped
+completing. Investigate control/bulk interaction across reacquisition separately
+from ffplay backpressure; do not conflate these two stalled paths.
