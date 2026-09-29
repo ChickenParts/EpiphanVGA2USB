@@ -123,3 +123,9 @@ errors; the recovery changes address unfinished reads and geometry changes.
 A [cold power-cycle observation](docs/hardware/reset-recovery-2026-09-29.md)
 verified signal-loss clearing and automatic return without restarting either
 process. Graphics/text transitions and repeated reset endurance remain pending.
+
+The live viewer filters ffplay's keyboard and mouse playback controls so typing
+commands cannot pause or seek the capture stream. Build its SDL2 runtime policy
+with `ninja driver` or `ninja viewer-input`. Window expose, resize and close
+remain available; close through the window manager. See the
+[backpressure diagnosis and regression](docs/hardware/viewer-backpressure-2026-09-29.md).

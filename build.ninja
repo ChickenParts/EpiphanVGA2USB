@@ -17,7 +17,7 @@ rule run_bootstrap_test
   pool = console
 
 build test-bootstrap: run_bootstrap_test build/test-bootstrap
-build test: phony test-firmware test-bootstrap test-frame test-mode test-transport test-viewer test-session test-stream-frame
+build test: phony test-firmware test-bootstrap test-frame test-mode test-transport test-viewer test-session test-stream-frame test-viewer-input
 
 rule audit_firmware
   command = ruby tools/extract_firmware.rb vendor/vga2usb_bins.o_shipped build/firmware
@@ -37,7 +37,19 @@ rule compile_driver
   description = Build native original VGA2USB bringup tool
 
 build build/vga2usb-native: compile_driver src/main.c src/bootstrap.c src/bootstrap.h src/capture.c src/capture.h src/capture_mode.c src/capture_mode.h src/home_frame.c src/home_frame.h src/source_watch.c src/source_watch.h src/stream_frame.c src/stream_frame.h src/vesa_modes.h build/firmware.h
-build driver: phony build/vga2usb-native
+build driver: phony build/vga2usb-native build/libviewer-input.so
+
+rule compile_viewer_input
+  command = mkdir -p build && cc -std=c11 -Wall -Wextra -Werror -fPIC -shared src/viewer_input.c -ldl -o $out
+build build/libviewer-input.so: compile_viewer_input src/viewer_input.c
+build viewer-input: phony build/libviewer-input.so
+rule compile_viewer_input_test
+  command = cc -std=c11 -Wall -Wextra -Werror tests/test_viewer_input.c -ldl -o $out
+build build/test-viewer-input: compile_viewer_input_test tests/test_viewer_input.c | build/libviewer-input.so
+rule run_viewer_input_test
+  command = SDL_VIDEODRIVER=dummy LD_PRELOAD=$$PWD/build/libviewer-input.so ./build/test-viewer-input
+  pool = console
+build test-viewer-input: run_viewer_input_test build/test-viewer-input build/libviewer-input.so
 
 default test
 
@@ -84,7 +96,7 @@ rule viewer_test
   command = ruby tests/test_viewer_stream.rb
   description = Verify complete live-viewer frame packets in both VGA modes
   pool = console
-build test-viewer: viewer_test tests/test_viewer_stream.rb tools/view-live.sh build/test-stream-frame
+build test-viewer: viewer_test tests/test_viewer_stream.rb tools/view-live.sh build/test-stream-frame build/libviewer-input.so
 
 rule compile_session_test
   command = cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -Ibuild $$(pkg-config --cflags libusb-1.0) tests/test_capture_session.c src/bootstrap.c -o $out

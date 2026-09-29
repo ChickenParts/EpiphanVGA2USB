@@ -7,8 +7,14 @@ export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
 # The 15-byte header and fixed payload keep image2pipe packets stable on mode changes.
 width=720 height=480
 frame_bytes=$((width * height * 3 + 15))
+input_policy="$project_dir/build/libviewer-input.so"
+if [ ! -f "$input_policy" ]; then
+  echo 'Build the live-viewer input policy with ninja viewer-input before viewing.' >&2
+  exit 1
+fi
 # USB access is required only for the producer; the viewer runs as the desktop user.
 sudo -n "$project_dir/build/vga2usb-native" --stream "$@" |
+  env LD_PRELOAD="$input_policy${LD_PRELOAD:+:$LD_PRELOAD}" \
   ffplay -hide_banner -loglevel warning -fs -window_title 'VGA2USB live capture' \
     -f image2pipe -vcodec ppm -frame_size "$frame_bytes" -framerate 60 -use_wallclock_as_timestamps 1 \
     -sync ext -fflags nobuffer -noinfbuf -probesize 32 -analyzeduration 0 \

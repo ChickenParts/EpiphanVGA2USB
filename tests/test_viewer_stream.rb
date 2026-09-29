@@ -14,6 +14,7 @@ check(File.executable?(renderer), 'Build the stream renderer with ninja test-str
 Dir.mktmpdir('vga2usb-viewer') do |root|
   FileUtils.mkdir_p(["#{root}/tools", "#{root}/build", "#{root}/bin"])
   FileUtils.cp(File.expand_path('../tools/view-live.sh', __dir__), "#{root}/tools/view-live.sh")
+  FileUtils.cp(File.expand_path('../build/libviewer-input.so', __dir__), "#{root}/build/libviewer-input.so")
   File.write("#{root}/bin/sudo", "#!/bin/sh\nshift\nexec \"$@\"\n")
   File.write("#{root}/build/vga2usb-native", <<~'RUBY')
     #!/usr/bin/env ruby
