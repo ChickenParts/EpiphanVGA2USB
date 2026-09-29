@@ -52,7 +52,7 @@ to the next divisor of the source height. Successful tuning persists in a stream
 
 ```sh
 sudo ./build/vga2usb-native --capture snapshot.ppm --port 1-12.2
-sudo ./build/vga2usb-native --stream --port 1-12.2 | ffplay -fs -f image2pipe -vcodec ppm -framerate 14 -vf setdar=4/3 -i -
+./tools/view-live.sh --port 1-12.2
 ```
 
 Auto mode currently accepts only the uniquely identified 720×400 text timing with
@@ -60,7 +60,10 @@ Auto mode currently accepts only the uniquely identified 720×400 text timing wi
 640×480@59.94 preset, validating 525 lines and refresh within 1 Hz of the preset.
 Horizontal resolution is ambiguous from the status counters alone for some modes,
 so generic 640×480 auto-selection is deliberately not implemented. The program
-rejects absent/unsupported timing and short or unexpected frame lengths.
+rejects incomplete frames. A one-shot snapshot rejects absent or unsupported timing.
+A continuous stream clears its display, waits for supported timing, and resumes
+when the signal returns. Incomplete nonnegative B1 replies are retried in streaming
+mode; negative USB errors remain fatal.
 
 [Capture setup](docs/protocol/frame-setup.md) records the original ADC-specific
 defaults, the B0 skip, and the complete default B4 templates.
@@ -77,3 +80,16 @@ and phase-search evidence. Only 720×400 is physically qualified so far.
 For now, reconnect recovery is manual: stop the viewer, reconnect the USB device,
 inspect it, run `--bootstrap` if needed, and start the viewer again. This sequence
 has not yet been exercised as a hardware recovery test.
+
+The viewer uses [arrival timestamps](https://ffmpeg.org/ffmpeg-formats.html#Format-Options)
+and [bounded input buffering](https://ffmpeg.org/ffplay.html#Advanced-options),
+so variable capture speed does not rely on a guessed playback rate. `-framerate 60`
+sets timestamp precision; it does not claim 60 captured frames per second. The test host
+currently delivers about 8.8 complete frames per second at five capture phases.
+Every 64 completed stream frames, stderr records frame count and monotonic time.
+
+While reads are pending, a periodic 100 ms observation tick checks documented B1
+status. Only observed unavailable/changed timing causes source recovery; no elapsed
+capture deadline is imposed. Brief interruptions that return to identical timing
+between observations can still be missed. See the
+[restart investigation](docs/hardware/restart-2026-09-28.md).

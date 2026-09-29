@@ -41,3 +41,18 @@ consume captured frames. Ruby provides reproducible extraction and offline check
 Each phase reports its completed checks and remaining limits. The capture phases
 depend on recovered protocol evidence and actual source video; they are not implied
 complete by offline tests.
+
+## Restart regression: observed 2026-09-28
+
+Source-PC restart interrupted a frame after 612768/614304 bytes. The native
+reader was still waiting for USB data after the source regained its original
+720×400 timing. Restarting the owned capture process restored a complete image.
+
+Repair within the accepted recovery design: monitor documented B1 status while
+bulk reads are pending. A periodic Linux timer wakes the USB event loop, which
+otherwise polls indefinitely. Cancel and drain reads only on observed lost or
+changed VGA timing, never because a transfer has exceeded an elapsed deadline.
+Continuous mode clears its display and waits for supported source timing to
+return; fatal USB errors still stop it. Test loss during a pending frame, valid
+signal returning, continued output boundaries, and unchanged one-shot rejection.
+Then verify on the test host and record the actual limits of the hardware test.

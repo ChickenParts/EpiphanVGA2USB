@@ -1,6 +1,11 @@
-#include <limits.h>
+#define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <time.h>
 #include <stdlib.h>
 #include "capture.h"
+#include "source_watch.h"
+
+#define V2U_SOURCE_CHANGED (-33)
 
 struct read_chunk {
     struct libusb_transfer *transfer;
@@ -15,6 +20,20 @@ static void LIBUSB_CALL received(struct libusb_transfer *transfer)
     chunk->pending = 0;
 }
 
+static int source_matches(libusb_device_handle *handle, const uint8_t command[31],
+                          const struct v2u_home_layout *layout)
+{
+    uint8_t status[10], measured_command[31];
+    struct v2u_home_layout measured;
+    int got=libusb_control_transfer(handle,0xc0,0xb1,0,0,status,sizeof status,0);
+    enum v2u_mode mode=layout->width == 720 ? V2U_MODE_720_400 : V2U_MODE_640_480;
+    if (got < 0) return got;
+    if (got != sizeof status) return V2U_SOURCE_CHANGED;
+    if (v2u_capture_mode(status,mode,measured_command,&measured) < 0 ||
+        measured_command[2] != command[2]) return V2U_SOURCE_CHANGED;
+    return 0;
+}
+
 static int capture_wire(libusb_context *context, libusb_device_handle *handle,
                         const uint8_t command[31], uint8_t *wire,
                         const struct v2u_home_layout *layout)
@@ -26,7 +45,8 @@ static int capture_wire(libusb_context *context, libusb_device_handle *handle,
     size_t count = (layout->wire_bytes + block - 1) / block;
     struct read_chunk *chunks = calloc(count, sizeof(*chunks));
     if (!chunks) return -1;
-    int error = 0;
+    struct v2u_source_watch watch;
+    int error = v2u_source_watch_init(&watch, context);
     size_t submitted = 0;
     for (size_t i = 0; i < count; ++i) {
         size_t offset = i * block;
@@ -76,7 +96,12 @@ static int capture_wire(libusb_context *context, libusb_device_handle *handle,
                 if (chunks[i].pending) libusb_cancel_transfer(chunks[i].transfer);
             cancelling = 1;
         }
-        int event = libusb_handle_events_completed(context, NULL);
+        int probe = 0;
+        if (v2u_source_watch_wait(&watch, &probe) < 0) error = -1;
+        if (probe && !error) error=source_matches(handle,command,layout);
+        /* poll already waited for readiness; handle available callbacks without waiting. */
+        struct timeval ready = {0,0};
+        int event = libusb_handle_events_timeout_completed(context, &ready, NULL);
         if (event < 0 && event != LIBUSB_ERROR_INTERRUPTED) error = event;
     }
     size_t received_bytes = 0;
@@ -90,6 +115,7 @@ static int capture_wire(libusb_context *context, libusb_device_handle *handle,
                 received_bytes, layout->wire_bytes, submitted);
         if (!error) error = -32;
     }
+    v2u_source_watch_destroy(&watch);
     free(chunks);
     return error < 0 ? error : 0;
 }
@@ -115,20 +141,49 @@ static int ppm(FILE *output, const struct v2u_home_layout *layout, const uint8_t
     return fflush(output) == 0 ? error : -1;
 }
 
+static int clear_display(FILE *output, const struct v2u_home_layout *layout)
+{
+    uint8_t *pixels=calloc(1,layout->output_bytes);
+    if (!pixels) return -1;
+    int result=ppm(output,layout,pixels);
+    free(pixels); return result;
+}
+static void wait_for_signal(void)
+{
+    struct timespec wait={0,100000000};
+    while (nanosleep(&wait,&wait) < 0 && errno == EINTR) {}
+}
+
 int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
                      enum v2u_mode requested, FILE *output, int continuous)
 {
+    struct v2u_home_layout display;
+    if (v2u_home_layout(requested == V2U_MODE_640_480 ? 640 : 720,
+                        requested == V2U_MODE_640_480 ? 480 : 400,2,1,&display) < 0) return -1;
+    int waiting = 0;
     size_t frames = 0; unsigned retained_phases = 2, retained_width = 0, retained_height = 0;
     do {
         uint8_t status[10], command[31];
         int got = libusb_control_transfer(handle, 0xc0, 0xb1, 0, 0, status, sizeof status, 0);
-        if (got != sizeof status) { fprintf(stderr, "Mode status returned %d/10 bytes\n", got); return -1; }
+        if (got != sizeof status && (got < 0 || !continuous)) { fprintf(stderr, "Mode status returned %d/10 bytes\n", got); return -1; }
         struct v2u_home_layout layout;
-        if (v2u_capture_mode(status, requested, command, &layout) < 0) {
-            fprintf(stderr, "Absent or unsupported VGA timing; auto supports 720x400@70.\n"
-                            "Select --mode 640x480 explicitly for verified 640x480@59.94 sources.\n");
-            return -1;
+        if (got != sizeof status || v2u_capture_mode(status, requested, command, &layout) < 0) {
+            if (!continuous) {
+                fprintf(stderr, "Absent or unsupported VGA timing; auto supports 720x400@70.\n"
+                                "Select --mode 640x480 explicitly for known 640x480@59.94 sources.\n");
+                return -1;
+            }
+            if (!waiting) {
+                fprintf(stderr, "Waiting for supported VGA signal; viewer remains open\n");
+                if (clear_display(output,&display) < 0) return -1;
+            }
+            waiting=1; retained_width=retained_height=0;
+            wait_for_signal();
+            continue;
         }
+        display=layout;
+        if (waiting) fprintf(stderr, "VGA signal returned; resuming capture\n");
+        waiting=0;
         if (layout.width == retained_width && layout.height == retained_height) {
             while (layout.vertical_phases < retained_phases)
                 if (v2u_capture_next_phase(command, &layout) < 0) return -1;
@@ -139,6 +194,8 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
         for (;;) {
             error = capture_wire(context, handle, command, wire, &layout);
             if (error != -32) break;
+            int signal=source_matches(handle,command,&layout);
+            if (signal < 0) { error=signal; break; }
             if (++failures < 3) continue;
             if (v2u_capture_next_phase(command, &layout) < 0) break;
             failures = 0;
@@ -152,8 +209,20 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
         if (!error) error = ppm(output, &layout, pixels);
         free(wire);
         free(pixels);
+        if (error == V2U_SOURCE_CHANGED && continuous) {
+            fprintf(stderr,"VGA status unavailable or changed during frame; waiting for supported signal\n");
+            if (clear_display(output,&display) < 0) return -1;
+            waiting=1; retained_width=retained_height=0;
+            continue;
+        }
         if (error < 0) return error;
         frames++;
+        if (continuous && frames % 64 == 0) {
+            struct timespec now;
+            if (clock_gettime(CLOCK_MONOTONIC,&now) == 0)
+                fprintf(stderr,"Frame %zu delivered at %lld.%03ld, V=%u\n",frames,
+                        (long long)now.tv_sec,now.tv_nsec/1000000,layout.vertical_phases);
+        }
         if (frames == 1) fprintf(stderr, "Captured %ux%u, %zu wire bytes, original RGB565 HOME format\n",
                                 layout.width, layout.height, layout.wire_bytes);
     } while (continuous);
