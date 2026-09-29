@@ -1,6 +1,6 @@
 # Original VGA2USB 5555:1110 frame protocol: static evidence
 
-Investigated 2026-09-28 without USB traffic, target-machine writes, kernel builds, or module loading. Scope is the original device, not VGA2USB LR/HR/PRO. This is a bounded map from the symbolized vendor object; unresolved bytes are preserved as unresolved instead of supplying a speculative command.
+Investigated 2026-09-28 without USB traffic, target-machine writes, kernel builds, or module loading. Scope is the original device, not VGA2USB LR/HR/PRO. Follow-up `FRAME-SETUP.md` resolves allocation defaults and shows that B0 is skipped on this device. This is a bounded map from the symbolized vendor object; unresolved bytes are preserved as unresolved instead of supplying a speculative command.
 
 Input: `vendor/vga2usb_bins.o_shipped`, ELF64 x86-64 relocatable, SHA256 `536b9be25b310d57a77d2888fe83cd2e499417dbb963129edc90357cf9736dbb`.
 
@@ -44,21 +44,21 @@ The sender copies gp bytes 0..13, then gp bytes 14..30. It byte-swaps precisely 
 | 3 | byte | ADC clock/range control derived from estimated pixel clock and horizontal phase count; 0x1132e..0x11394. Not a generic pixel-format selector. |
 | 4 | byte | Analog timing/clamp control initialized to 8 for these low pixel-clock modes, 0x25b63..0x25bac. Hardware register semantics not fully traced. |
 | 5 | byte | Analog timing/clamp control initialized by bounded back-porch calculation, 0x25b99..0x25bc2. For listed modes this calculation gives 20. Hardware semantics not fully traced. |
-| 6 | byte | Board-configured control, defaults to 16 if board byte +0x6c is zero, 0x25a39..0x25a4f. Original channel has zero here. |
-| 7..9 | 3 bytes | Three analog-channel controls, all initialized to 128 on original channel, 0x25a52..0x25a8a. Avoid assigning gain/offset names without finishing ADC register trace. |
-| 10..12 | 3 bytes | Three analog-channel controls, all initialized to 0 on original channel, 0x25a95..0x25ab5. |
+| 6 | byte | ADC-table control: original AD9884A ops +0x6c is 31 (0x1f), used by 0x25a39..0x25a4f. Generic fallback 16 applies only when this ADC-table byte is zero. |
+| 7..9 | 3 bytes | Three analog-channel controls, original defaults all 112 (0x70), midpoint of AD9884A ops +0x5c/+0x5e = 32/192, 0x25a52..0x25a8a. Generic fallback 128 is not used on this ADC. |
+| 10..12 | 3 bytes | Three analog-channel controls, original defaults all 32 (0x20), midpoint of AD9884A ops +0x50/+0x52 = 16/48, 0x25a95..0x25ab5. Generic fallback zero is not used on this ADC. |
 | 13 | byte | Analog-channel control flags, low two bits initialized to 3, 0x25a8d..0x25abc. |
 | 14 | BE16 | Active width W, 0x25ac7. |
 | 16 | BE16 | Active height H, 0x25ab8..0x25ac0. |
 | 18 | BE16 | Vertical phase count V. Initial VESA value is 1 for progressive modes; HOME initializer changes this to 2 normally or 4 when mode flags 0x20 is set, 0x220e4..0x22117. |
 | 20 | BE16 | Lines per vertical phase L = H / V, 0x2210c..0x22119. |
-| 22 | BE16 | Horizontal capture start. Normally sync width + back porch; can instead use a board override and board-specific adjustment, 0x25ae9..0x25b13. |
+| 22 | BE16 | Horizontal capture start. Normally sync width + back porch. AD9884A table +0x6a override is zero and ADC instance +0x28 adjustment is explicitly zero; original default therefore uses this normal value. 0x25ae9..0x25b13; see FRAME-SETUP.md. |
 | 24 | byte | Vertical capture start. Back porch plus sync width when mode flag 0x80 is set, 0x25ad8..0x25ae6. |
 | 25 | byte | Vertical phase selector/count byte, kept synchronized with offset 18 by HOME initializer and retry path 0x221e0..0x22229. |
 | 26 | byte | Horizontal sample phase count P, determined by `AD9884A_hinterlaces`, 0x113d0..0x11474. |
 | 27 | byte | Horizontal sync threshold. `vgrabber_set_hsync_threshold` 0x28d20 writes vgrabber+0x10b = gp+27. Default 128 from `vgrabber_init` 0x283a1..0x283a6. |
 | 28 | byte | Vertical sync threshold. `vgrabber_set_vsync_threshold` 0x28d80 writes vgrabber+0x10c = gp+28. Default 128 from the same 0x8080 initializer. |
-| 29 | byte | Noise-filter level, range 0..5. `vgrabber_set_noise_filter` 0x28cd0..0x28cfd validates and writes vgrabber+0x10d = gp+29. Retained by VESA_clear_gp; initial zero allocation not yet traced to this field. |
+| 29 | byte | Noise-filter level, range 0..5. `vgrabber_set_noise_filter` 0x28cd0..0x28cfd validates and writes vgrabber+0x10d = gp+29. Initial value zero: usb_board_init 0x19e7..0x1a1f clears the entire 0x338-byte vgrabber before vgrabber_init. Retained by VESA_clear_gp. |
 | 30 | byte | Capture flags. Bit 0x02 follows gp+0x33 bit 0x04; bit 0x04 follows gp+0x83 mask 0x42000; bit 0x08 is adjusted for interlaced modes, 0x25b0a..0x25bd1. Default progressive, uncropped RGB path sets none of these three bits. |
 
 `VESA_clear_gp` 0x25640 preserves bytes 27..29 and the following 32-bit property at offset 31; it clears the rest of the parameter prefix. Byte 31 itself is **not sent** in B4.
@@ -94,14 +94,14 @@ Derived normal, progressive parameter fields:
 | Byte 25 | 02 | 02 |
 | P / byte 26 | 01 | 01 |
 
-Conditional payload templates (byte 2 requires measured status; byte 29 retains the selected noise-filter level; horizontal start remains conditional on board-instance adjustment):
+Default first-capture payload templates for the exact standard timing records and fresh default controls (only SS requires the valid source measurement):
 
 ```
-640x480: 03 20 SS 00 08 14 10 80 80 80 00 00 00 03 02 80 01 e0 00 02 00 f0 00 90 21 02 01 80 80 NF 00
-720x400: 03 84 SS 00 08 14 10 80 80 80 00 00 00 03 02 d0 01 90 00 02 00 c8 00 9e 24 02 01 80 80 NF 00
+640x480: 03 20 SS 00 08 14 1f 70 70 70 20 20 20 03 02 80 01 e0 00 02 00 f0 00 90 21 02 01 80 80 00 00
+720x400: 03 84 SS 00 08 14 1f 70 70 70 20 20 20 03 02 d0 01 90 00 02 00 c8 00 9e 24 02 01 80 80 00 00
 ```
 
-These are deliberately **not complete commands ready to send**. `SS` is measured ADC status, `NF` is the selected noise-filter level (0..5). Thresholds shown are the established defaults 128/128. Modes can also be altered by crop, forced mode, input selection, analog controls, or HOME retries. The report does not invent those values.
+`SS = B1[8] & 3` after confirming a valid measured signal matches the selected timing record. Other bytes are now established original-device defaults. A no-source B1 (first BE16 field zero) does not identify either timing record. Modes can be altered by forced mode, input selection, analog controls, or HOME retries; see FRAME-SETUP.md for setup ordering and evidence.
 
 ## Frame format, segmentation, and deordering
 
@@ -155,9 +155,9 @@ The original read-lines implementation creates read requests over the capture pi
 
 ## Remaining bounded questions
 
-1. Confirm initial noise-filter level at byte 29 from the allocation path and finish hardware meanings for byte 30 flags. This report does not establish a complete autonomous mode command.
+1. Finish hardware meanings for byte 30 flags; fresh progressive RGB initial value zero is established in FRAME-SETUP.md.
 2. Trace the measured ADC status byte 2 bits to physical sync polarity, and determine whether bit 0x10 can occur on original hardware. A measured value is required to finish the command templates.
 3. Finish ADC register names for byte 3 and analog controls 4..13. Their derivation/defaults above are established, hardware-facing labels are not all established.
-4. Determine the original board-instance adjustment to horizontal start (the branch at 0x25b03..0x25b07); templates assume the adjustment is inactive.
+4. Initial ADC-instance horizontal adjustment is resolved as zero in FRAME-SETUP.md; table override is also zero. Revisit if supporting ADC models other than original AD9884A.
 5. Confirm how HOME adaptive retries changing V beyond 2 affect firmware timing, not just the static deordering formula. Retry function 0x221e0 chooses a larger divisor of H and updates V/L/count bytes.
 6. Verify nominal frame lengths, padding contents, and segment ordering with a controlled capture only after USB traffic is separately authorized. Static code supplies strong evidence of no frame header on this path, but does not replace a hardware capture.

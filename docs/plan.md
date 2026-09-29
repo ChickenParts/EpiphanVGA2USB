@@ -27,7 +27,7 @@ consume captured frames. Ruby provides reproducible extraction and offline check
 - [x] Trace `grab_protocol_home`, the original USB grab-command function and bulk
   reader; document command fields and pixel/row representation in
   `docs/protocol/frames.md`.
-- [ ] Add offline packet and synthetic-frame tests; implement only established
+- [x] Add offline packet and synthetic-frame tests; implement only established
   fields, including bounds and exact transfer-length checks.
 - [ ] Verify no-signal handling then physical PC text/graphics frames. Compare output
   size, colors and orientation with the source screen.

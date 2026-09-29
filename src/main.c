@@ -4,6 +4,7 @@
 #include <string.h>
 #include "bootstrap.h"
 #include "firmware.h"
+#include "capture.h"
 
 static int control_out(void *context, uint8_t request, uint16_t value,
                        uint16_t index, const uint8_t *data, uint16_t length)
@@ -28,12 +29,21 @@ static void physical_path(libusb_device *device, char *out, size_t size)
 
 int main(int argc, char **argv)
 {
-    const char *action = "--inspect", *port = NULL;
+    const char *action = "--inspect", *port = NULL, *capture_path = NULL;
+    enum v2u_mode requested_mode = V2U_MODE_AUTO;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--port") && i + 1 < argc) port = argv[++i];
+        else if (!strcmp(argv[i], "--capture") && i + 1 < argc) { action = "--capture"; capture_path = argv[++i]; }
+        else if (!strcmp(argv[i], "--stream")) action = "--stream";
+        else if (!strcmp(argv[i], "--mode") && i + 1 < argc) {
+            const char *mode = argv[++i];
+            if (!strcmp(mode, "640x480")) requested_mode = V2U_MODE_640_480;
+            else if (!strcmp(mode, "720x400")) requested_mode = V2U_MODE_720_400;
+            else { fprintf(stderr, "Unknown capture mode %s\n", mode); return 2; }
+        }
         else if (!strcmp(argv[i], "--inspect") || !strcmp(argv[i], "--bootstrap") || !strcmp(argv[i], "--sync")) action = argv[i];
         else {
-            fprintf(stderr, "Usage: %s [--inspect|--bootstrap|--sync] [--port BUS-PORT[.PORT]]\n", argv[0]);
+            fprintf(stderr, "Usage: %s [--inspect|--bootstrap|--sync|--capture FILE|--stream] [--mode 720x400|640x480] [--port BUS-PORT[.PORT]]\n", argv[0]);
             return 2;
         }
     }
@@ -52,7 +62,7 @@ int main(int argc, char **argv)
             current.idVendor != 0x5555 || current.idProduct != 0x1110) continue;
         physical_path(list[i], path, sizeof path);
         if (port && strcmp(port, path)) continue;
-        printf("Original VGA2USB 5555:1110, port %s, device %u, bcdDevice %04x, USB speed %d\n",
+        fprintf(stderr, "Original VGA2USB 5555:1110, port %s, device %u, bcdDevice %04x, USB speed %d\n",
                path, libusb_get_device_address(list[i]), current.bcdDevice, libusb_get_device_speed(list[i]));
         chosen = list[i];
         descriptor = current;
@@ -65,8 +75,8 @@ int main(int argc, char **argv)
         goto done;
     }
     if (!strcmp(action, "--inspect")) goto done;
-    if (!strcmp(action, "--sync") && descriptor.bcdDevice != firmware_version) {
-        fprintf(stderr, "Sync query requires verified startup firmware %04x; bootstrap first\n", firmware_version);
+    if (strcmp(action, "--bootstrap") && descriptor.bcdDevice != firmware_version) {
+        fprintf(stderr, "This operation requires verified startup firmware %04x; bootstrap first\n", firmware_version);
         status = 1;
         goto done;
     }
@@ -88,7 +98,36 @@ int main(int argc, char **argv)
         status = 1;
         goto done;
     }
-    if (!strcmp(action, "--bootstrap")) {
+    if (!strcmp(action, "--capture") || !strcmp(action, "--stream")) {
+        struct libusb_config_descriptor *configuration = NULL;
+        result = libusb_get_active_config_descriptor(chosen, &configuration);
+        int endpoint_found = 0;
+        if (result == 0) {
+            for (unsigned i = 0; i < configuration->bNumInterfaces; ++i) {
+                const struct libusb_interface *interface = &configuration->interface[i];
+                for (int a = 0; a < interface->num_altsetting; ++a) {
+                    const struct libusb_interface_descriptor *alt = &interface->altsetting[a];
+                    if (alt->bInterfaceNumber != 0 || alt->bAlternateSetting != 0) continue;
+                    for (unsigned e = 0; e < alt->bNumEndpoints; ++e) {
+                        const struct libusb_endpoint_descriptor *endpoint = &alt->endpoint[e];
+                        if (endpoint->bEndpointAddress == 0x82 &&
+                            (endpoint->bmAttributes & 3) == LIBUSB_TRANSFER_TYPE_BULK &&
+                            endpoint->wMaxPacketSize == 512) endpoint_found = 1;
+                    }
+                }
+            }
+            libusb_free_config_descriptor(configuration);
+        }
+        if (!endpoint_found) { fprintf(stderr, "Expected initialized original-model bulk endpoint 0x82\n"); status = 1; }
+        else {
+            FILE *output = capture_path ? fopen(capture_path, "wb") : stdout;
+            if (!output) { perror("Capture output"); status = 1; }
+            else {
+                status = v2u_capture_ppm(context, handle, requested_mode, output, !strcmp(action, "--stream")) < 0;
+                if (capture_path && fclose(output) != 0) status = 1;
+            }
+        }
+    } else if (!strcmp(action, "--bootstrap")) {
         printf("Loading original-model volatile RAM firmware, image SHA256 %s\n", firmware_hash);
         fflush(stdout);
         result = v2u_bootstrap(control_out, handle, firmware_segments,
