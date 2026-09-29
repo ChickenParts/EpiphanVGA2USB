@@ -99,16 +99,22 @@ sets timestamp precision; it does not claim 60 captured frames per second. The t
 currently delivers about 8.8 complete frames per second at five capture phases.
 Every 64 completed stream frames, stderr records frame count and monotonic time.
 
-While reads are pending, a periodic 100 ms observation tick checks documented B1
-status. Only observed unavailable/changed timing causes source recovery; no elapsed
-capture deadline is imposed. Brief interruptions that return to identical timing
-between observations can still be missed. See the
-[restart investigation](docs/hardware/restart-2026-09-28.md).
+Timing measurement B1 runs before starting a frame or after short-frame reads
+have been cancelled and drained. It must never run during image collection:
+the original firmware aborts its capture engine on a new USB setup request.
+The event loop still wakes periodically to dispatch USB callbacks, without
+issuing a measurement or imposing a capture deadline. See the
+[firmware trace](docs/protocol/firmware-control-interruption.md).
 
+A VGA outage that leaves image reads pending without completion or error cannot
+be detected by this host path until the reads finish. The last displayed image
+may therefore remain visible while the source is absent. Reboot recovery after
+removing intrusive B1 queries is undergoing physical qualification.
 A later [viewer stall](docs/hardware/viewer-stall-2026-09-29.md) blocked
 the producer's output pipe even though USB remained connected. Restarting the
 viewer restored capture. Complete image packets now eliminate the reproduced
 PPM parser errors, and the tester confirmed a later reboot recovered
-automatically. A further reboot stalled on the final bulk read despite complete
-image packets. The new USB-session reopen path is undergoing hardware validation;
-the previously observed B1 control-query stall remains separate.
+automatically. Further stalls persisted after USB-session reopening. Firmware
+analysis established that the pending-read B1 watcher itself aborts capture;
+that watcher is now removed from active reads. Historical backpressure and the
+uncompleted B1 query are recorded separately in the incident document.

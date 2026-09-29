@@ -28,7 +28,7 @@ int v2u_source_watch_init(struct v2u_source_watch *watch, libusb_context *contex
     if (!watch->fds) return -1;
     watch->timer = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     if (watch->timer < 0) { v2u_source_watch_destroy(watch); return -1; }
-    /* Wake for status observation; this never sets a USB or process deadline. */
+    /* Wake the event dispatcher only; B1 measurement would abort pending capture. */
     const struct itimerspec tick = {.it_interval={0,100000000},.it_value={0,100000000}};
     if (timerfd_settime(watch->timer, 0, &tick, NULL) < 0) {
         v2u_source_watch_destroy(watch); return -1;

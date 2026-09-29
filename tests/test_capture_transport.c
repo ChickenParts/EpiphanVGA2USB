@@ -1,9 +1,12 @@
+#define _POSIX_C_SOURCE 200809L
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <poll.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/wait.h>
 #include "capture.h"
 
 static struct libusb_transfer *queue[8];
@@ -33,11 +36,13 @@ int LIBUSB_CALL libusb_control_transfer(libusb_device_handle *h, uint8_t type,
 {
     (void)h; assert(val == 0 && idx == 0 && wait == 0);
     if (req == 0xb1) {
+        /* Original B1 firmware aborts GPIF; never measure with queued image reads. */
+        assert(queued == 0);
         ++status_queries;
         if ((fault == 13 && status_queries == 1) || (fault == 14 && status_queries == 2)) return 0;
         const uint8_t status[10] = {0x6f,0x7d,1,0xc2,0,0xf2,0xa,0xc6,2,0};
-        assert(type == 0xc0 && len == 10); memcpy(data,status,10); if ((fault == 4 && setups == 2) || (fault == 6 && setups == 9) || (fault == 7 && setups == 3) || (fault == 9 && setups == 1) || (fault == 10 && status_queries == 3) || (fault == 12 && setups == 2) || ((fault == 13 || fault == 14) && setups == 2)) return LIBUSB_ERROR_NO_DEVICE;
-        if ((fault == 15 && setups == 1) || ((fault == 7 || fault == 8 || fault == 12) && (status_queries == 2 || status_queries == 3)) || ((fault == 9 || fault == 10) && status_queries <= 2) || fault == 11) memset(data,0,10);
+        assert(type == 0xc0 && len == 10); memcpy(data,status,10); if ((fault == 4 && setups == 2) || (fault == 6 && setups == 9) || (fault == 7 && setups == 1) || (fault == 9 && setups == 1) || (fault == 10 && status_queries == 3) || (fault == 12 && setups == 2) || ((fault == 13 || fault == 14) && setups == 2)) return LIBUSB_ERROR_NO_DEVICE;
+        if ((fault == 15 && setups == 1) || (fault == 12 && (status_queries == 2 || status_queries == 3)) || ((fault == 9 || fault == 10) && status_queries <= 2) || fault == 11) memset(data,0,10);
         return 10;
     }
     assert(type == 0x40 && req == 0xb4 && len == 31);
@@ -55,7 +60,7 @@ int LIBUSB_CALL libusb_control_transfer(libusb_device_handle *h, uint8_t type,
 int LIBUSB_CALL libusb_handle_events_completed(libusb_context *c, int *done)
 {
     (void)c; (void)done; assert(queued > 0);
-    if ((fault == 7 || fault == 8 || fault == 14) && setups == 1) assert(status_queries >= 2);
+    if ((fault == 7 || fault == 8) && setups == 1) assert(status_queries == 1);
     struct libusb_transfer *t = queue[0];
     memmove(queue,queue+1,(size_t)(--queued)*sizeof(*queue));
     if (t->status != LIBUSB_TRANSFER_CANCELLED) {
@@ -83,7 +88,17 @@ int main(void)
 {
     for (fault=0; fault<=15; ++fault) {
         queued=submitted=setup=cancelled=freed=frame_reads=setups=callbacks=0;
-        status_queries=0; event_fd=eventfd((fault == 7 || fault == 8 || fault == 14) ? 0 : 1,EFD_NONBLOCK|EFD_CLOEXEC); assert(event_fd >= 0);
+        status_queries=0; event_fd=eventfd((fault == 7 || fault == 8) ? 0 : 1,EFD_NONBLOCK|EFD_CLOEXEC); assert(event_fd >= 0);
+        pid_t producer=-1;
+        if (fault == 7 || fault == 8) {
+            producer=fork(); assert(producer >= 0);
+            if (!producer) {
+                /* Delayed hardware completion crosses two old observation ticks. */
+                struct timespec delay={0,250000000}; assert(nanosleep(&delay,NULL)==0);
+                uint64_t one=1; assert(write(event_fd,&one,sizeof one)==sizeof one);
+                _exit(0);
+            }
+        }
         FILE *f=tmpfile(); assert(f);
         int result=v2u_capture_ppm(NULL,NULL,fault == 10 ? V2U_MODE_640_480 : V2U_MODE_AUTO,f,fault == 4 || fault == 6 || fault == 7 || fault == 9 || fault == 10 || fault == 12 || fault == 13 || fault == 14 || fault == 15);
         assert(queued == 0);
@@ -107,13 +122,13 @@ int main(void)
                 char header[16]={0}; assert(fread(header,1,15,f)==15);
                 assert(strcmp(header,"P6\n720 400\n255\n")==0);
             }
-        } else if (fault == 7) {
-            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 5);
-            assert(ftell(f)==15+720*400*3); /* Cleared display; main must reopen USB before another frame. */
+        } else if (fault == 7 || fault == 8) {
+            assert(fault == 7 ? result < 0 : result == 0);
+            assert(setups == 1 && cancelled == 0 && submitted == 5);
+            assert(ftell(f)==15+720*400*3);
+            assert(status_queries == (fault == 7 ? 2 : 1));
             rewind(f); assert(fseek(f,15,SEEK_SET)==0);
-            for (int i=0;i<720*400*3;++i) assert(fgetc(f)==0);
-        } else if (fault == 8) {
-            assert(result < 0 && setups == 1 && cancelled == 5 && ftell(f)==0);
+            assert(fgetc(f)==255 && fgetc(f)==0 && fgetc(f)==0);
         } else if (fault == 9 || fault == 10) {
             assert(result < 0 && cancelled == 0);
             assert(ftell(f)==(fault == 9 ? 2*(15+720*400*3) : 15+640*480*3));
@@ -128,13 +143,14 @@ int main(void)
             assert(result < 0 && setups == 2 && cancelled == 0);
             assert(ftell(f)==3*(15+720*400*3));
         } else if (fault == 14) {
-            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 5);
-            assert(ftell(f)==15+720*400*3);
+            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 0);
+            assert(ftell(f)==2*(15+720*400*3));
         } else if (fault == 15) {
             assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 0);
             assert(ftell(f)==2*(15+720*400*3));
         } else { assert(result < 0 && ftell(f) == 0 && cancelled > 0); }
 
+        if (producer > 0) { int child_status; assert(waitpid(producer,&child_status,0)==producer); assert(WIFEXITED(child_status) && WEXITSTATUS(child_status)==0); }
         fclose(f); close(event_fd);
     }
     puts("Capture transport: row-aligned reads, B4 order, short frame rejection and cancellation passed");

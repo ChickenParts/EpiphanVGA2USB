@@ -96,7 +96,7 @@ static int capture_wire(libusb_context *context, libusb_device_handle *handle,
         }
         int probe = 0;
         if (v2u_source_watch_wait(&watch, &probe) < 0) error = -1;
-        if (probe && !error) error=source_matches(handle,command,layout);
+        /* B1 aborts GPIF in original firmware: measure only outside image reads. */
         /* poll already waited for readiness; handle available callbacks without waiting. */
         struct timeval ready = {0,0};
         int event = libusb_handle_events_timeout_completed(context, &ready, NULL);

@@ -123,3 +123,26 @@ Hardware recovery after a new reboot remains pending. This change cannot recover
 an uncompleted synchronous B1 query, or an interruption missed by the status
 observer, and does not add discovery after a physical USB disconnect.
 
+## Reopen trial failure and independent confirmation
+
+A tester reported a stationary red fragment.
+At approximately 06:02 UTC the native process had completed 201 frames in its
+latest reopened session, then stalled with all five reads pending. Timing before
+that frame was `6f 7d 01 c2 00 f4 0a c4 02 00`; the layout was 720x400/V5.
+The log proves that several observed changes had invoked the new reopen path
+and resumed capture before this later failure. Reopening alone was insufficient.
+
+After preserving the stalled state, stopping that capture and taking an
+independent one-shot image succeeded at V4. It showed a DOS prompt, so the
+mirror had been stale while the PC continued running.
+
+Firmware analysis then established that the pending-read B1 status observer
+was destructive: the USB setup handler aborts GPIF before processing a new
+request, and B1 measurement itself aborts GPIF too. See the
+[firmware path and host correction](../protocol/firmware-control-interruption.md).
+The host now measures between frames or after drained short reads, never during
+active image collection. A delayed-completion regression failed before this
+change and passed afterward; full Ninja tests/build passed locally and on the test host.
+The corrected capture was deployed and resumed live frames.
+Reboot recovery after this correction remains pending physical qualification.
+
