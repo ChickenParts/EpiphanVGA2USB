@@ -79,8 +79,9 @@ Explicit-preset divergence and repeated unchanged stalls are checked separately.
 Real FFmpeg decodes actual-renderer packets across different source geometries.
 
 The static finding explains one failure mechanism; it does not prove every
-historical stall had the same cause. Automatic physical reboot and graphics/text
-qualification is still required. A passive observer would require a separately
+historical stall had the same cause. A [physical cold power cycle](../hardware/reset-recovery-2026-09-29.md)
+verified clearing and automatic return with the same processes. Graphics/text
+transitions and repeated reset endurance remain pending. A passive observer would require a separately
 established firmware path: substituting an arbitrary ADC or memory request still
 triggers the identified setup handler. Negative USB errors and physical unplug
 remain separate from supported VGA timing reacquisition.

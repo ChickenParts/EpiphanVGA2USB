@@ -10,7 +10,9 @@ module or restarting the host is unnecessary.
 ## Current status
 
 Physical 720×400 text capture and a full-screen live mirror are verified on the test host
-without a host reboot. Physical reboot recovery is still under investigation.
+without a host reboot. Signal loss and automatic return on a test-PC cold power
+cycle are verified with the same native capture and viewer processes. Graphics
+mode transitions still need physical qualification. [Recovery evidence](docs/hardware/reset-recovery-2026-09-29.md).
 
 Implemented: hash-pinned firmware extraction, RAM-only bootstrap, sync-status
 query, original RGB565 HOME decoder, row-aligned asynchronous USB collection,
@@ -82,7 +84,7 @@ of exhausting phase tuning. Initial startup without VGA waits for supported timi
 Negative USB errors remain fatal; physical USB unplug recovery is separate from
 VGA reset recovery. `ninja test-session test-transport test-stream-frame test-viewer`
 checks session cleanup, stalled reads, explicit presets, mode changes, rendering
-and real FFmpeg decoding. These checks do not qualify physical reboot recovery.
+and real FFmpeg decoding. Hardware qualification is recorded separately below.
 
 [Capture setup](docs/protocol/frame-setup.md) records the original ADC-specific
 defaults, the B0 skip, and the complete default B4 templates.
@@ -118,4 +120,6 @@ status queries and active frame reads must be separated. A later
 [viewer stall](docs/hardware/viewer-stall-2026-09-29.md) also blocked the
 producer's output pipe. Complete frame packets resolve the reproduced PPM parser
 errors; the recovery changes address unfinished reads and geometry changes.
-Physical reset and graphics/text transitions still require hardware qualification.
+A [cold power-cycle observation](docs/hardware/reset-recovery-2026-09-29.md)
+verified signal-loss clearing and automatic return without restarting either
+process. Graphics/text transitions and repeated reset endurance remain pending.
