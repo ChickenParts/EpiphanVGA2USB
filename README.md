@@ -26,7 +26,7 @@ See [the design](docs/design.md), [the implementation plan](docs/plan.md),
 ## Build and checks
 
 Ruby with minitest and zlib, a C compiler, pkg-config, libusb development files,
-binutils, and Ninja are needed. First obtain the official vendor object as described
+binutils, FFmpeg (for viewer checks), and Ninja are needed. First obtain the official vendor object as described
 in [firmware instructions](firmware/README.md), then run:
 
 ```sh
@@ -81,6 +81,12 @@ For now, reconnect recovery is manual: stop the viewer, reconnect the USB device
 inspect it, run `--bootstrap` if needed, and start the viewer again. This sequence
 has not yet been exercised as a hardware recovery test.
 
+The viewer reads each complete PPM frame as one input packet: 864015 bytes for
+720×400 or 921615 bytes for 640×480. This avoids header parsing across arbitrary
+4096-byte chunks. `ninja test-viewer` checks both input modes with real FFmpeg
+decoding, a clear frame and exact returned-frame pixel checksums. It does not
+exercise the graphical player or impose a program deadline.
+
 The viewer uses [arrival timestamps](https://ffmpeg.org/ffmpeg-formats.html#Format-Options)
 and [bounded input buffering](https://ffmpeg.org/ffplay.html#Advanced-options),
 so variable capture speed does not rely on a guessed playback rate. `-framerate 60`
@@ -96,4 +102,6 @@ between observations can still be missed. See the
 
 A later [viewer stall](docs/hardware/viewer-stall-2026-09-29.md) blocked
 the producer's output pipe even though USB remained connected. Restarting the
-viewer restored capture; its underlying cause remains unresolved.
+viewer restored capture. Complete image packets now eliminate the reproduced
+PPM parser errors, and the tester confirmed a later reboot recovered
+automatically. The previously observed B1 control-query stall remains separate.

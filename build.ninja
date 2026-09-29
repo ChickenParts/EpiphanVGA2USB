@@ -17,7 +17,7 @@ rule run_bootstrap_test
   pool = console
 
 build test-bootstrap: run_bootstrap_test build/test-bootstrap
-build test: phony test-firmware test-bootstrap test-frame test-mode test-transport
+build test: phony test-firmware test-bootstrap test-frame test-mode test-transport test-viewer
 
 rule audit_firmware
   command = ruby tools/extract_firmware.rb vendor/vga2usb_bins.o_shipped build/firmware
@@ -79,3 +79,9 @@ rule run_transport_test
   pool = console
 
 build test-transport: run_transport_test build/test-capture-transport
+
+rule viewer_test
+  command = ruby tests/test_viewer_stream.rb
+  description = Verify complete live-viewer frame packets in both VGA modes
+  pool = console
+build test-viewer: viewer_test tests/test_viewer_stream.rb tools/view-live.sh
