@@ -17,7 +17,7 @@ rule run_bootstrap_test
   pool = console
 
 build test-bootstrap: run_bootstrap_test build/test-bootstrap
-build test: phony test-firmware test-bootstrap test-frame test-mode test-transport test-viewer test-session
+build test: phony test-firmware test-bootstrap test-frame test-mode test-transport test-viewer test-session test-stream-frame
 
 rule audit_firmware
   command = ruby tools/extract_firmware.rb vendor/vga2usb_bins.o_shipped build/firmware
@@ -33,10 +33,10 @@ rule render_firmware
 build build/firmware.h: render_firmware vendor/vga2usb_bins.o_shipped tools/vendor_firmware.rb tools/render_firmware.rb
 
 rule compile_driver
-  command = cc -std=c11 -Wall -Wextra -Werror -g -Isrc -Ibuild src/main.c src/bootstrap.c src/capture.c src/capture_mode.c src/home_frame.c src/source_watch.c $$(pkg-config --cflags --libs libusb-1.0) -o $out
+  command = cc -std=c11 -Wall -Wextra -Werror -g -Isrc -Ibuild src/main.c src/bootstrap.c src/capture.c src/capture_mode.c src/home_frame.c src/source_watch.c src/stream_frame.c $$(pkg-config --cflags --libs libusb-1.0) -o $out
   description = Build native original VGA2USB bringup tool
 
-build build/vga2usb-native: compile_driver src/main.c src/bootstrap.c src/bootstrap.h src/capture.c src/capture.h src/capture_mode.c src/capture_mode.h src/home_frame.c src/home_frame.h src/source_watch.c src/source_watch.h build/firmware.h
+build build/vga2usb-native: compile_driver src/main.c src/bootstrap.c src/bootstrap.h src/capture.c src/capture.h src/capture_mode.c src/capture_mode.h src/home_frame.c src/home_frame.h src/source_watch.c src/source_watch.h src/stream_frame.c src/stream_frame.h src/vesa_modes.h build/firmware.h
 build driver: phony build/vga2usb-native
 
 default test
@@ -58,7 +58,7 @@ rule compile_mode_test
   command = mkdir -p build && cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc tests/test_capture_mode.c src/capture_mode.c src/home_frame.c -o $out
   description = Compile original capture-mode request checks
 
-build build/test-capture-mode: compile_mode_test tests/test_capture_mode.c src/capture_mode.c src/capture_mode.h src/home_frame.c
+build build/test-capture-mode: compile_mode_test tests/test_capture_mode.c src/capture_mode.c src/capture_mode.h src/home_frame.c src/vesa_modes.h
 
 rule run_mode_test
   command = ./build/test-capture-mode
@@ -68,10 +68,10 @@ rule run_mode_test
 build test-mode: run_mode_test build/test-capture-mode
 
 rule compile_transport_test
-  command = mkdir -p build && cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc $$(pkg-config --cflags libusb-1.0) tests/test_capture_transport.c src/capture.c src/capture_mode.c src/home_frame.c src/source_watch.c -o $out
+  command = mkdir -p build && cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc $$(pkg-config --cflags libusb-1.0) tests/test_capture_transport.c src/capture.c src/capture_mode.c src/home_frame.c src/source_watch.c src/stream_frame.c -o $out
   description = Compile async capture transport failure checks
 
-build build/test-capture-transport: compile_transport_test tests/test_capture_transport.c src/capture.c src/capture_mode.c src/home_frame.c src/source_watch.c src/capture.h src/capture_mode.h src/home_frame.h src/source_watch.h
+build build/test-capture-transport: compile_transport_test tests/test_capture_transport.c src/capture.c src/capture_mode.c src/home_frame.c src/source_watch.c src/capture.h src/capture_mode.h src/home_frame.h src/source_watch.h src/stream_frame.c src/stream_frame.h src/vesa_modes.h
 
 rule run_transport_test
   command = ./build/test-capture-transport
@@ -84,7 +84,7 @@ rule viewer_test
   command = ruby tests/test_viewer_stream.rb
   description = Verify complete live-viewer frame packets in both VGA modes
   pool = console
-build test-viewer: viewer_test tests/test_viewer_stream.rb tools/view-live.sh
+build test-viewer: viewer_test tests/test_viewer_stream.rb tools/view-live.sh build/test-stream-frame
 
 rule compile_session_test
   command = cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -Ibuild $$(pkg-config --cflags libusb-1.0) tests/test_capture_session.c src/bootstrap.c -o $out
@@ -95,3 +95,5 @@ rule session_test
   description = Verify fresh USB session after observed VGA loss
   pool = console
 build test-session: session_test build/test-capture-session
+
+include tests/stream-frame.ninja

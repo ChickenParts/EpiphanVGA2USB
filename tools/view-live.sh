@@ -3,17 +3,9 @@ set -eu
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
-width=720 height=400 previous=
-for argument do
-  if [ "$previous" = --mode ]; then
-    case "$argument" in
-      640x480) width=640 height=480 ;;
-      720x400) width=720 height=400 ;;
-    esac
-  fi
-  previous=$argument
-done
-# Both supported P6 headers are 15 bytes; keep each frame in one input packet.
+# The producer scales every continuous frame to one 720x480 RGB24 P6 canvas.
+# The 15-byte header and fixed payload keep image2pipe packets stable on mode changes.
+width=720 height=480
 frame_bytes=$((width * height * 3 + 15))
 # USB access is required only for the producer; the viewer runs as the desktop user.
 sudo -n "$project_dir/build/vga2usb-native" --stream "$@" |

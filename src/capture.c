@@ -2,8 +2,12 @@
 #include <errno.h>
 #include <time.h>
 #include <stdlib.h>
+#include <string.h>
 #include "capture.h"
 #include "source_watch.h"
+#include "stream_frame.h"
+
+#define V2U_FRAME_RECHECK (-34)
 
 struct read_chunk {
     struct libusb_transfer *transfer;
@@ -19,22 +23,24 @@ static void LIBUSB_CALL received(struct libusb_transfer *transfer)
 }
 
 static int source_matches(libusb_device_handle *handle, const uint8_t command[31],
-                          const struct v2u_home_layout *layout)
+                          const struct v2u_home_layout *layout, enum v2u_mode requested)
 {
     uint8_t status[10], measured_command[31];
     struct v2u_home_layout measured;
     int got=libusb_control_transfer(handle,0xc0,0xb1,0,0,status,sizeof status,0);
-    enum v2u_mode mode=layout->width == 720 ? V2U_MODE_720_400 : V2U_MODE_640_480;
+
     if (got < 0) return got;
     if (got != sizeof status) return V2U_CAPTURE_REOPEN;
-    if (v2u_capture_mode(status,mode,measured_command,&measured) < 0 ||
-        measured_command[2] != command[2]) return V2U_CAPTURE_REOPEN;
+    if (v2u_capture_mode(status,requested,measured_command,&measured) < 0 ||
+        memcmp(measured_command,command,18) ||
+        memcmp(measured_command+22,command+22,3) ||
+        measured.horizontal_phases != layout->horizontal_phases) return V2U_CAPTURE_REOPEN;
     return 0;
 }
 
 static int capture_wire(libusb_context *context, libusb_device_handle *handle,
                         const uint8_t command[31], uint8_t *wire,
-                        const struct v2u_home_layout *layout)
+                        const struct v2u_home_layout *layout, unsigned period)
 {
     /* Vendor .text43140 bounds transfers to 128 KB; HOME rounds to whole rows. */
     size_t stride = layout->segment_stride;
@@ -44,7 +50,10 @@ static int capture_wire(libusb_context *context, libusb_device_handle *handle,
     struct read_chunk *chunks = calloc(count, sizeof(*chunks));
     if (!chunks) return -1;
     struct v2u_source_watch watch;
-    int error = v2u_source_watch_init(&watch, context);
+    /* Allow four complete phase schedules, at least one second between checks. */
+    unsigned cadence_ms = (unsigned)((uint64_t)period * layout->vertical_phases * layout->horizontal_phases * 4 / 2000);
+    if (cadence_ms < 1000) cadence_ms=1000;
+    int error = v2u_source_watch_init(&watch, context, cadence_ms);
     size_t submitted = 0;
     for (size_t i = 0; i < count; ++i) {
         size_t offset = i * block;
@@ -101,6 +110,10 @@ static int capture_wire(libusb_context *context, libusb_device_handle *handle,
         struct timeval ready = {0,0};
         int event = libusb_handle_events_timeout_completed(context, &ready, NULL);
         if (event < 0 && event != LIBUSB_ERROR_INTERRUPTED) error = event;
+        if (probe && !error) {
+            for (size_t i=0; i<submitted; ++i)
+                if (chunks[i].pending) { error=V2U_FRAME_RECHECK; break; }
+        }
     }
     size_t received_bytes = 0;
     for (size_t i = 0; i < count; ++i) {
@@ -143,7 +156,7 @@ static int clear_display(FILE *output, const struct v2u_home_layout *layout)
 {
     uint8_t *pixels=calloc(1,layout->output_bytes);
     if (!pixels) return -1;
-    int result=ppm(output,layout,pixels);
+    int result=v2u_stream_ppm(output,layout,pixels);
     free(pixels); return result;
 }
 static void wait_for_signal(void)
@@ -167,8 +180,8 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
         struct v2u_home_layout layout;
         if (got != sizeof status || v2u_capture_mode(status, requested, command, &layout) < 0) {
             if (!continuous) {
-                fprintf(stderr, "Absent or unsupported VGA timing; auto supports 720x400@70.\n"
-                                "Select --mode 640x480 explicitly for known 640x480@59.94 sources.\n");
+                fprintf(stderr, "Absent or unsupported progressive VGA timing (up to 1024x768).\n"
+                                "Use an explicit --mode preset when vertical timing is ambiguous.\n");
                 return -1;
             }
             if (!waiting) {
@@ -189,12 +202,22 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
         }
         uint8_t *wire = malloc(layout.wire_bytes), *pixels = malloc(layout.output_bytes);
         if (!wire || !pixels) { free(wire); free(pixels); return -1; }
-        int error, failures = 0;
+        int error, failures = 0, reacquisitions = 0;
         for (;;) {
-            error = capture_wire(context, handle, command, wire, &layout);
-            if (error != -32) break;
-            int signal=source_matches(handle,command,&layout);
+            error = capture_wire(context, handle, command, wire, &layout,
+                                 ((unsigned)status[0] << 8) | status[1]);
+            if (error == V2U_FRAME_RECHECK)
+                fprintf(stderr, "Image reads drained for scheduled VGA timing reacquisition\n");
+            int scheduled = error == V2U_FRAME_RECHECK;
+            if (!scheduled && error != -32) break;
+            int signal=source_matches(handle,command,&layout,requested);
             if (signal < 0) { error=signal; break; }
+            if (scheduled) {
+                if (++reacquisitions < 3) continue;
+                fprintf(stderr, "Repeated unfinished capture; reopening with unchanged VGA timing\n");
+                error=continuous ? V2U_CAPTURE_REOPEN : -32;
+                break;
+            }
             if (++failures < 3) continue;
             if (v2u_capture_next_phase(command, &layout) < 0) break;
             failures = 0;
@@ -205,7 +228,7 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
             retained_width = layout.width; retained_height = layout.height;
         }
         if (!error) error = v2u_home_decode(&layout, wire, layout.wire_bytes, pixels, layout.output_bytes);
-        if (!error) error = ppm(output, &layout, pixels);
+        if (!error) error = continuous ? v2u_stream_ppm(output, &layout, pixels) : ppm(output, &layout, pixels);
         free(wire);
         free(pixels);
         if (error == V2U_CAPTURE_REOPEN && continuous) {

@@ -1,0 +1,12 @@
+rule compile_stream_frame_test
+  command = mkdir -p build && cc -std=c11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc tests/test_stream_frame.c src/stream_frame.c src/home_frame.c -o $out
+  description = Compile fixed-canvas streaming renderer checks
+
+build build/test-stream-frame: compile_stream_frame_test tests/test_stream_frame.c src/stream_frame.c src/stream_frame.h src/home_frame.c src/home_frame.h
+
+rule run_stream_frame_test
+  command = ./build/test-stream-frame
+  description = Verify RGB565 resizing, fixed P6 packets and output errors
+  pool = console
+
+build test-stream-frame: run_stream_frame_test build/test-stream-frame

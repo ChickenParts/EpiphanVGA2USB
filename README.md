@@ -55,20 +55,34 @@ sudo ./build/vga2usb-native --capture snapshot.ppm --port 1-12.2
 ./tools/view-live.sh --port 1-12.2
 ```
 
-Auto mode currently accepts only the uniquely identified 720×400 text timing with
-450 total lines and refresh 69–71 Hz. `--mode 640x480` explicitly selects the
-640×480@59.94 preset, validating 525 lines and refresh within 1 Hz of the preset.
-Horizontal resolution is ambiguous from the status counters alone for some modes,
-so generic 640×480 auto-selection is deliberately not implemented. The program
-rejects incomplete frames. A one-shot snapshot rejects absent or unsupported timing.
-A continuous stream clears its display, waits for supported timing, and resumes
-when the signal returns. After observing unavailable or changed timing in an active
-capture, it drains pending reads, closes the USB handle, and opens a fresh capture
-session before issuing another frame request. The viewer's stdout pipe remains
-open. Initial startup without VGA still waits in the same session; incomplete
-nonnegative B1 replies are treated as unavailable timing. Negative USB errors
-remain fatal. `ninja test-session test-transport` checks cleanup and reopen failure,
-not physical reboot recovery.
+Auto mode uses the vendor's timing score and table order for 36 progressive timing
+records up to 1024×768, including 640×480, 720×400 and 800×600. Higher pixel
+clocks use two or four horizontal capture partitions. `--mode 640x480` and
+`--mode 720x400` pin the original presets. B1 supplies vertical timing, so some
+horizontal resolutions remain ambiguous; explicit presets help when the source
+is known. Interlaced modes are not supported by this path.
+
+A one-shot snapshot keeps the source dimensions and rejects absent or unsupported
+timing. A continuous stream emits complete 720×480 RGB PPM canvases, including its
+black signal-loss frame, so the viewer's packet size remains stable on mode changes.
+Short frames are discarded and adaptive phase tuning is retained.
+
+Timing measurement B1 interrupts the original firmware's capture engine. It runs
+before starting a frame or after all image reads have completed or been cancelled
+and drained. If reads remain unfinished at a scheduled reacquisition tick, the host
+drains them before measuring again. The interval allows four requested phase
+schedules, with a minimum of one second. USB control and bulk timeout arguments
+remain zero; the viewer has no runtime limit. A healthy completed frame wins when
+its callback and the tick arrive together.
+
+Unavailable or changed timing clears the display and reopens the USB capture
+session while the viewer's stdout pipe stays open. An unchanged timing measurement
+retries acquisition; repeated scheduled interruptions reopen the session instead
+of exhausting phase tuning. Initial startup without VGA waits for supported timing.
+Negative USB errors remain fatal; physical USB unplug recovery is separate from
+VGA reset recovery. `ninja test-session test-transport test-stream-frame test-viewer`
+checks session cleanup, stalled reads, explicit presets, mode changes, rendering
+and real FFmpeg decoding. These checks do not qualify physical reboot recovery.
 
 [Capture setup](docs/protocol/frame-setup.md) records the original ADC-specific
 defaults, the B0 skip, and the complete default B4 templates.
@@ -86,11 +100,11 @@ For now, reconnect recovery is manual: stop the viewer, reconnect the USB device
 inspect it, run `--bootstrap` if needed, and start the viewer again. This sequence
 has not yet been exercised as a hardware recovery test.
 
-The viewer reads each complete PPM frame as one input packet: 864015 bytes for
-720×400 or 921615 bytes for 640×480. This avoids header parsing across arbitrary
-4096-byte chunks. `ninja test-viewer` checks both input modes with real FFmpeg
-decoding, a clear frame and exact returned-frame pixel checksums. It does not
-exercise the graphical player or impose a program deadline.
+The viewer reads each complete streaming PPM canvas as one 1036815-byte packet.
+This avoids header parsing across arbitrary 4096-byte chunks and source-size changes.
+`ninja test-viewer` feeds the actual renderer across four source geometries through
+real FFmpeg and checks exact returned-frame pixels and the black clear frame.
+It does not exercise the graphical player or impose a program deadline.
 
 The viewer uses [arrival timestamps](https://ffmpeg.org/ffmpeg-formats.html#Format-Options)
 and [bounded input buffering](https://ffmpeg.org/ffplay.html#Advanced-options),
@@ -99,22 +113,9 @@ sets timestamp precision; it does not claim 60 captured frames per second. The t
 currently delivers about 8.8 complete frames per second at five capture phases.
 Every 64 completed stream frames, stderr records frame count and monotonic time.
 
-Timing measurement B1 runs before starting a frame or after short-frame reads
-have been cancelled and drained. It must never run during image collection:
-the original firmware aborts its capture engine on a new USB setup request.
-The event loop still wakes periodically to dispatch USB callbacks, without
-issuing a measurement or imposing a capture deadline. See the
-[firmware trace](docs/protocol/firmware-control-interruption.md).
-
-A VGA outage that leaves image reads pending without completion or error cannot
-be detected by this host path until the reads finish. The last displayed image
-may therefore remain visible while the source is absent. Reboot recovery after
-removing intrusive B1 queries is undergoing physical qualification.
-A later [viewer stall](docs/hardware/viewer-stall-2026-09-29.md) blocked
-the producer's output pipe even though USB remained connected. Restarting the
-viewer restored capture. Complete image packets now eliminate the reproduced
-PPM parser errors, and the tester confirmed a later reboot recovered
-automatically. Further stalls persisted after USB-session reopening. Firmware
-analysis established that the pending-read B1 watcher itself aborts capture;
-that watcher is now removed from active reads. Historical backpressure and the
-uncompleted B1 query are recorded separately in the incident document.
+The [firmware trace](docs/protocol/firmware-control-interruption.md) records why
+status queries and active frame reads must be separated. A later
+[viewer stall](docs/hardware/viewer-stall-2026-09-29.md) also blocked the
+producer's output pipe. Complete frame packets resolve the reproduced PPM parser
+errors; the recovery changes address unfinished reads and geometry changes.
+Physical reset and graphics/text transitions still require hardware qualification.

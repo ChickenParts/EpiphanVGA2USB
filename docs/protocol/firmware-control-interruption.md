@@ -51,27 +51,39 @@ The relevant setup-interruption helper bytes are:
 
 ## Host correction and limits
 
-The host now performs B1 measurement before queueing the first image read and
-before B4. Following a short frame, it cancels and drains all remaining submitted
-reads before measuring again. It sends no status request while frame reads are
-pending. This preserves the recovered read-before-B4 ordering while eliminating
-an unrelated setup interrupt from active collection. USB transfer deadlines remain
-zero; no elapsed frame cutoff is introduced.
+B1 measurement runs before the first image read and B4, or after all submitted
+image reads have completed or been cancelled and drained. No timing query runs
+with an image read pending. This preserves the recovered read-before-B4 ordering.
 
-The regression asserts no queued reads at every B1 call. A separate process
-releases simulated USB completion after 250 ms, crossing two old observation
-ticks, for streaming and one-shot capture. The old implementation fails this
-regression by sending B1 while reads remain queued. The corrected implementation
-collects the full image in both cases without cancelling it. Existing failure,
-short-frame adaptation and between-frame source-loss tests remain included.
+The first correction removed intrusive pending-read queries; it could still wait
+forever when VGA loss produced no image completion. Scheduled reacquisition now
+wakes the event loop after four phase schedules, with a minimum interval of one
+second. Available callbacks run first. If reads remain pending, the host cancels
+and drains them, then measures timing. A complete frame at the tick is retained.
+USB control and bulk timeout arguments remain zero. This is an interruption and
+retry of unfinished acquisition; it is not a runtime limit on the program.
 
-This static finding explains a mechanism by which the old watcher could stop
-acquisition; it does not prove that every historical stall had the same cause.
-If signal loss produces neither completion nor an error, the host still waits
-for the device, and cannot independently clear the display or reopen that active
-session. Physical reboot qualification is required. A reliable passive observer
-would require a separately established firmware path; substituting an arbitrary
-ADC or memory request would still trigger the identified setup handler.
+Unchanged supported timing retries collection. Repeated scheduled interruptions
+reopen the capture session while the viewer remains running; they do not advance
+short-frame phase tuning to exhaustion. Changed or absent timing emits a black
+canvas and reopens the USB session. Every continuous frame uses the same720×480
+canvas and1036815-byte packet, even when the source resolution changes.
+One-shot screenshots retain native source dimensions.
+
+The regression asserts no queued reads at every B1 call. Delayed completion after
+250 ms crosses two old observation ticks and still yields a full frame without
+cancellation. Stalled-read cases prove cancel/drain before absent, changed and
+unchanged timing. A longer sequence runs720×400, loss,640×480,800×600,
+1024×768 withP=2, and720×400 through actual USB mocks, HOME decode and rendering.
+Explicit-preset divergence and repeated unchanged stalls are checked separately.
+Real FFmpeg decodes actual-renderer packets across different source geometries.
+
+The static finding explains one failure mechanism; it does not prove every
+historical stall had the same cause. Automatic physical reboot and graphics/text
+qualification is still required. A passive observer would require a separately
+established firmware path: substituting an arbitrary ADC or memory request still
+triggers the identified setup handler. Negative USB errors and physical unplug
+remain separate from supported VGA timing reacquisition.
 
 ## Offline reproduction
 

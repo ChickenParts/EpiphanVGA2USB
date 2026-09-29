@@ -12,7 +12,7 @@ void v2u_source_watch_destroy(struct v2u_source_watch *watch)
     free(watch->fds);
     watch->timer = -1; watch->fds = NULL; watch->count = 0;
 }
-int v2u_source_watch_init(struct v2u_source_watch *watch, libusb_context *context)
+int v2u_source_watch_init(struct v2u_source_watch *watch, libusb_context *context, unsigned cadence_ms)
 {
     *watch = (struct v2u_source_watch){.timer=-1};
     const struct libusb_pollfd **usb = libusb_get_pollfds(context);
@@ -28,8 +28,10 @@ int v2u_source_watch_init(struct v2u_source_watch *watch, libusb_context *contex
     if (!watch->fds) return -1;
     watch->timer = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     if (watch->timer < 0) { v2u_source_watch_destroy(watch); return -1; }
-    /* Wake the event dispatcher only; B1 measurement would abort pending capture. */
-    const struct itimerspec tick = {.it_interval={0,100000000},.it_value={0,100000000}};
+    /* Schedule signal reacquisition; caller drains image reads before B1. */
+    if (!cadence_ms) { v2u_source_watch_destroy(watch); return -1; }
+    const struct timespec interval = {cadence_ms / 1000, (long)(cadence_ms % 1000) * 1000000};
+    const struct itimerspec tick = {.it_interval=interval,.it_value=interval};
     if (timerfd_settime(watch->timer, 0, &tick, NULL) < 0) {
         v2u_source_watch_destroy(watch); return -1;
     }
