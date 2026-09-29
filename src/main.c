@@ -84,6 +84,8 @@ int main(int argc, char **argv)
         puts("Firmware descriptor already matches; no RAM upload performed");
         goto done;
     }
+open_capture: ;
+    int reopen = 0;
     libusb_device_handle *handle = NULL;
     result = libusb_open(chosen, &handle);
     if (result < 0) {
@@ -120,11 +122,13 @@ int main(int argc, char **argv)
         }
         if (!endpoint_found) { fprintf(stderr, "Expected initialized original-model bulk endpoint 0x82\n"); status = 1; }
         else {
-            FILE *output = capture_path ? fopen(capture_path, "wb") : stdout;
+            FILE *output = !strcmp(action, "--capture") ? fopen(capture_path, "wb") : stdout;
             if (!output) { perror("Capture output"); status = 1; }
             else {
-                status = v2u_capture_ppm(context, handle, requested_mode, output, !strcmp(action, "--stream")) < 0;
-                if (capture_path && fclose(output) != 0) status = 1;
+                int capture_result = v2u_capture_ppm(context, handle, requested_mode, output, !strcmp(action, "--stream"));
+                reopen = capture_result == V2U_CAPTURE_REOPEN && !strcmp(action, "--stream");
+                status = reopen ? 0 : capture_result < 0;
+                if (output != stdout && fclose(output) != 0) status = 1;
             }
         }
     } else if (!strcmp(action, "--bootstrap")) {
@@ -152,6 +156,10 @@ int main(int argc, char **argv)
     }
     libusb_release_interface(handle, 0);
     libusb_close(handle);
+    if (reopen) {
+        fprintf(stderr, "VGA interruption: reopening USB capture session before resuming\n");
+        goto open_capture;
+    }
 done:
     libusb_free_device_list(list, 1);
     libusb_exit(context);

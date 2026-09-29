@@ -37,7 +37,7 @@ int LIBUSB_CALL libusb_control_transfer(libusb_device_handle *h, uint8_t type,
         if ((fault == 13 && status_queries == 1) || (fault == 14 && status_queries == 2)) return 0;
         const uint8_t status[10] = {0x6f,0x7d,1,0xc2,0,0xf2,0xa,0xc6,2,0};
         assert(type == 0xc0 && len == 10); memcpy(data,status,10); if ((fault == 4 && setups == 2) || (fault == 6 && setups == 9) || (fault == 7 && setups == 3) || (fault == 9 && setups == 1) || (fault == 10 && status_queries == 3) || (fault == 12 && setups == 2) || ((fault == 13 || fault == 14) && setups == 2)) return LIBUSB_ERROR_NO_DEVICE;
-        if (((fault == 7 || fault == 8 || fault == 12) && (status_queries == 2 || status_queries == 3)) || ((fault == 9 || fault == 10) && status_queries <= 2) || fault == 11) memset(data,0,10);
+        if ((fault == 15 && setups == 1) || ((fault == 7 || fault == 8 || fault == 12) && (status_queries == 2 || status_queries == 3)) || ((fault == 9 || fault == 10) && status_queries <= 2) || fault == 11) memset(data,0,10);
         return 10;
     }
     assert(type == 0x40 && req == 0xb4 && len == 31);
@@ -81,11 +81,11 @@ int LIBUSB_CALL libusb_handle_events_timeout_completed(libusb_context *c, struct
 }
 int main(void)
 {
-    for (fault=0; fault<=14; ++fault) {
+    for (fault=0; fault<=15; ++fault) {
         queued=submitted=setup=cancelled=freed=frame_reads=setups=callbacks=0;
         status_queries=0; event_fd=eventfd((fault == 7 || fault == 8 || fault == 14) ? 0 : 1,EFD_NONBLOCK|EFD_CLOEXEC); assert(event_fd >= 0);
         FILE *f=tmpfile(); assert(f);
-        int result=v2u_capture_ppm(NULL,NULL,fault == 10 ? V2U_MODE_640_480 : V2U_MODE_AUTO,f,fault == 4 || fault == 6 || fault == 7 || fault == 9 || fault == 10 || fault == 12 || fault == 13 || fault == 14);
+        int result=v2u_capture_ppm(NULL,NULL,fault == 10 ? V2U_MODE_640_480 : V2U_MODE_AUTO,f,fault == 4 || fault == 6 || fault == 7 || fault == 9 || fault == 10 || fault == 12 || fault == 13 || fault == 14 || fault == 15);
         assert(queued == 0);
         if (fault <= 1 || fault == 5) {
             assert(result == 0 && submitted == (fault == 5 ? 8 : fault ? 20 : 5) && setups == (fault ? 4 : 1));
@@ -108,16 +108,10 @@ int main(void)
                 assert(strcmp(header,"P6\n720 400\n255\n")==0);
             }
         } else if (fault == 7) {
-            assert(result < 0 && setups == 3 && cancelled == 5);
-            assert(ftell(f)==3*(15+720*400*3)); /* One cleared display, two complete frames. */
+            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 5);
+            assert(ftell(f)==15+720*400*3); /* Cleared display; main must reopen USB before another frame. */
             rewind(f); assert(fseek(f,15,SEEK_SET)==0);
             for (int i=0;i<720*400*3;++i) assert(fgetc(f)==0);
-            for (int i=1;i<=2;++i) {
-                assert(fseek(f,i*(15+720*400*3),SEEK_SET)==0);
-                char header[16]={0}; assert(fread(header,1,15,f)==15);
-                assert(strcmp(header,"P6\n720 400\n255\n")==0);
-                assert(fgetc(f)==255 && fgetc(f)==0 && fgetc(f)==0);
-            }
         } else if (fault == 8) {
             assert(result < 0 && setups == 1 && cancelled == 5 && ftell(f)==0);
         } else if (fault == 9 || fault == 10) {
@@ -128,13 +122,19 @@ int main(void)
         } else if (fault == 11) {
             assert(result < 0 && submitted == 0 && ftell(f)==0);
         } else if (fault == 12) {
-            assert(result < 0 && setups == 2 && cancelled == 4);
+            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 4);
+            assert(ftell(f)==15+720*400*3);
+        } else if (fault == 13) {
+            assert(result < 0 && setups == 2 && cancelled == 0);
+            assert(ftell(f)==3*(15+720*400*3));
+        } else if (fault == 14) {
+            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 5);
+            assert(ftell(f)==15+720*400*3);
+        } else if (fault == 15) {
+            assert(result == V2U_CAPTURE_REOPEN && setups == 1 && cancelled == 0);
             assert(ftell(f)==2*(15+720*400*3));
-        } else if (fault == 13 || fault == 14) {
-            assert(result < 0 && setups == 2);
-            assert(ftell(f)==(fault == 13 ? 3 : 2)*(15+720*400*3));
-            assert(cancelled==(fault == 14 ? 5 : 0));
         } else { assert(result < 0 && ftell(f) == 0 && cancelled > 0); }
+
         fclose(f); close(event_fd);
     }
     puts("Capture transport: row-aligned reads, B4 order, short frame rejection and cancellation passed");

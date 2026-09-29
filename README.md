@@ -10,7 +10,7 @@ module or restarting the host is unnecessary.
 ## Current status
 
 Physical 720×400 text capture and a full-screen live mirror are verified on the test host
-without a host reboot. The source is currently at a Phoenix BIOS POST prompt.
+without a host reboot. Physical reboot recovery is still under investigation.
 
 Implemented: hash-pinned firmware extraction, RAM-only bootstrap, sync-status
 query, original RGB565 HOME decoder, row-aligned asynchronous USB collection,
@@ -62,8 +62,13 @@ Horizontal resolution is ambiguous from the status counters alone for some modes
 so generic 640×480 auto-selection is deliberately not implemented. The program
 rejects incomplete frames. A one-shot snapshot rejects absent or unsupported timing.
 A continuous stream clears its display, waits for supported timing, and resumes
-when the signal returns. Incomplete nonnegative B1 replies are retried in streaming
-mode; negative USB errors remain fatal.
+when the signal returns. After observing unavailable or changed timing in an active
+capture, it drains pending reads, closes the USB handle, and opens a fresh capture
+session before issuing another frame request. The viewer's stdout pipe remains
+open. Initial startup without VGA still waits in the same session; incomplete
+nonnegative B1 replies are treated as unavailable timing. Negative USB errors
+remain fatal. `ninja test-session test-transport` checks cleanup and reopen failure,
+not physical reboot recovery.
 
 [Capture setup](docs/protocol/frame-setup.md) records the original ADC-specific
 defaults, the B0 skip, and the complete default B4 templates.
@@ -104,4 +109,6 @@ A later [viewer stall](docs/hardware/viewer-stall-2026-09-29.md) blocked
 the producer's output pipe even though USB remained connected. Restarting the
 viewer restored capture. Complete image packets now eliminate the reproduced
 PPM parser errors, and the tester confirmed a later reboot recovered
-automatically. The previously observed B1 control-query stall remains separate.
+automatically. A further reboot stalled on the final bulk read despite complete
+image packets. The new USB-session reopen path is undergoing hardware validation;
+the previously observed B1 control-query stall remains separate.

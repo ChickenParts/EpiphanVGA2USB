@@ -90,3 +90,36 @@ It does not establish that PPM parsing was the sole cause of every previous
 stall, or independently resolve the synchronous B1 control-query stall observed
 earlier. USB disconnect/reconnect and unsupported modes remain unqualified.
 
+## Final bulk read after a later reboot
+
+The tester reported another failure after the complete-packet viewer change.
+The old process had delivered frames through 2176, observed a source change,
+then retried short frames through five vertical phases without completing another
+frame. At approximately 05:32 UTC, GDB in `capture_wire` showed one pending read:
+four 130560-byte chunks were complete, while the final 92064-byte read had not
+completed. Status observations still matched 720x400 timing. This was a native
+capture wait, not the earlier output-pipe backpressure. USB remained connected.
+
+A trial change now returns `V2U_CAPTURE_REOPEN` after observing unavailable or
+changed timing in an active streaming session. Pending reads are cancelled and
+drained before capture storage is freed. Main then releases interface 0 and
+closes the handle before opening and claiming a fresh handle to the same selected
+device. The stdout pipe stays open, so the viewer remains alive. If the new
+session also starts without signal it may emit another complete black image;
+multiple clears across sessions are acceptable. No USB reset, firmware upload,
+new device request or elapsed deadline is introduced. This follows the evidence
+that manually restarting capture restored the picture; it does not establish
+why the firmware stopped completing a read.
+
+Regression checks failed before the production change, then passed locally and
+on the test host. They cover source loss during pending reads and between complete
+frames, cleanup before reopening, failed reopen, and one-shot capture remaining
+strict. Selecting `--stream` after an earlier `--capture FILE` sends the stream
+to stdout, avoiding reopening and truncating that file on every interruption.
+The full Ninja test suite and native build passed on both machines.
+
+The updated pipeline produced complete physical 720x400 frames on startup.
+Hardware recovery after a new reboot remains pending. This change cannot recover
+an uncompleted synchronous B1 query, or an interruption missed by the status
+observer, and does not add discovery after a physical USB disconnect.
+

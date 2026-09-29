@@ -5,8 +5,6 @@
 #include "capture.h"
 #include "source_watch.h"
 
-#define V2U_SOURCE_CHANGED (-33)
-
 struct read_chunk {
     struct libusb_transfer *transfer;
     int pending, length;
@@ -28,9 +26,9 @@ static int source_matches(libusb_device_handle *handle, const uint8_t command[31
     int got=libusb_control_transfer(handle,0xc0,0xb1,0,0,status,sizeof status,0);
     enum v2u_mode mode=layout->width == 720 ? V2U_MODE_720_400 : V2U_MODE_640_480;
     if (got < 0) return got;
-    if (got != sizeof status) return V2U_SOURCE_CHANGED;
+    if (got != sizeof status) return V2U_CAPTURE_REOPEN;
     if (v2u_capture_mode(status,mode,measured_command,&measured) < 0 ||
-        measured_command[2] != command[2]) return V2U_SOURCE_CHANGED;
+        measured_command[2] != command[2]) return V2U_CAPTURE_REOPEN;
     return 0;
 }
 
@@ -160,7 +158,7 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
     struct v2u_home_layout display;
     if (v2u_home_layout(requested == V2U_MODE_640_480 ? 640 : 720,
                         requested == V2U_MODE_640_480 ? 480 : 400,2,1,&display) < 0) return -1;
-    int waiting = 0;
+    int waiting = 0, observed = 0;
     size_t frames = 0; unsigned retained_phases = 2, retained_width = 0, retained_height = 0;
     do {
         uint8_t status[10], command[31];
@@ -177,11 +175,12 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
                 fprintf(stderr, "Waiting for supported VGA signal; viewer remains open\n");
                 if (clear_display(output,&display) < 0) return -1;
             }
+            if (observed) return V2U_CAPTURE_REOPEN;
             waiting=1; retained_width=retained_height=0;
             wait_for_signal();
             continue;
         }
-        display=layout;
+        display=layout; observed=1;
         if (waiting) fprintf(stderr, "VGA signal returned; resuming capture\n");
         waiting=0;
         if (layout.width == retained_width && layout.height == retained_height) {
@@ -209,11 +208,10 @@ int v2u_capture_ppm(libusb_context *context, libusb_device_handle *handle,
         if (!error) error = ppm(output, &layout, pixels);
         free(wire);
         free(pixels);
-        if (error == V2U_SOURCE_CHANGED && continuous) {
+        if (error == V2U_CAPTURE_REOPEN && continuous) {
             fprintf(stderr,"VGA status unavailable or changed during frame; waiting for supported signal\n");
             if (clear_display(output,&display) < 0) return -1;
-            waiting=1; retained_width=retained_height=0;
-            continue;
+            return V2U_CAPTURE_REOPEN;
         }
         if (error < 0) return error;
         frames++;
