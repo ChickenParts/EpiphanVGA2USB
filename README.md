@@ -8,13 +8,11 @@ The USB protocol and firmware loading sequence were recovered from Epiphan's old
 
 **This is for the original VGA2USB, not the VGA2USB LR.** Their firmware and setup commands aren't interchangeable.
 
-## Does it work?
-
-Yes, at least for what I originally needed it for.
+## Status
 
 ![720x400 capture from an 80386SX PC](docs/hardware/images/first-capture-2026-09-28.png)
 
-That's a real capture from a 16 MHz 80386SX running its Phoenix BIOS, using the native driver on a modern Linux host.
+The screenshot is a native capture of the Phoenix BIOS on a 16 MHz 80386SX.
 
 Currently working:
 
@@ -28,7 +26,7 @@ Currently working:
 
 Other progressive VGA timings are implemented, but still need physical testing. Interlaced modes aren't supported, and USB unplug/reconnect recovery is manual for now.
 
-Don't expect 60 fps. The original hardware and its rather peculiar capture protocol have other ideas. The test setup managed about 8.8 complete frames per second at five capture phases.
+The test host captured about 8.8 complete frames per second at five capture phases.
 
 ## Building
 
@@ -58,7 +56,7 @@ Load its volatile RAM firmware if needed:
 sudo ./build/vga2usb-native --bootstrap
 ```
 
-After the device re-enumerates, inspect it again. A screenshot is just:
+After the device re-enumerates, inspect it again. Capture a screenshot with:
 
 ```sh
 sudo ./build/vga2usb-native --capture screen.ppm

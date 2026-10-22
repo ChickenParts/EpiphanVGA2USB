@@ -1,8 +1,6 @@
 # Documentation
 
-The short version is in the [project README](../README.md). This is the longer version.
-
-If you're trying to use an old VGA2USB on a current Linux system, start with the [usage guide](usage.md). If you're here for the oddities of the USB protocol, start with the [protocol index](protocol/README.md).
+Start with the [usage guide](usage.md) to build and run the driver. The [protocol index](protocol/README.md) covers the USB protocol and implementation.
 
 ## Using the device
 
@@ -11,12 +9,12 @@ If you're trying to use an old VGA2USB on a current Linux system, start with the
 
 ## How it works
 
-- [Protocol and implementation overview](protocol/README.md) — startup, timing, frame transfer, and the places we still don't know everything
-- [Original driver/kernel ABI audit](kernel-abi.md) — why reviving the old kernel module is not just a matter of recompiling it
+- [Protocol and implementation overview](protocol/README.md) — startup, timing, frame transfer, and unresolved fields
+- [Original driver/kernel ABI audit](kernel-abi.md) — incompatible kernel structures and APIs
 
 The individual protocol reports are linked from the protocol index. They contain the actual offsets, request layouts, timing tables, and decoding details. They're kept separate so it's possible to trace a claim back to the vendor object or a hardware observation.
 
-## What has actually been tested
+## Hardware tests
 
 - [Hardware test index](hardware/README.md) — verified, simulated, and still untested
 - [First physical VGA capture](hardware/capture-2026-09-28.md), including the [screenshot](hardware/images/first-capture-2026-09-28.png)
@@ -32,12 +30,4 @@ The rest of `hardware/` is the dated debugging record. Some earlier approaches w
 
 The design and plan describe how the project got here, not necessarily how the current code works. Check the usage guide and protocol index for current behavior.
 
-## About the evidence
-
-We distinguish three things:
-
-1. **Disassembly evidence:** behavior and data structures recovered from a specific, hash-identified vendor binary.
-2. **Offline tests:** behavior exercised with synthetic frames, transfers, or FFmpeg, without claiming that a physical VGA2USB passed the same test.
-3. **Hardware verification:** observations from an actual original-model device and VGA source.
-
-When a mode or recovery case hasn't been tested on hardware, it's marked as such. The original VGA2USB (`5555:1110`) is also not interchangeable with the VGA2USB LR.
+The reports identify which results come from the vendor binary, offline tests, or physical hardware. See the [hardware test record](hardware/README.md) for tested modes and remaining gaps.
