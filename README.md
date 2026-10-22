@@ -2,7 +2,7 @@
 
 A native Linux userspace driver for the original Epiphan VGA2USB (`5555:1110`) capture device.
 
-I wanted to capture BIOS screens and video output from old PCs without keeping an equally old Linux installation around. Epiphan's original Linux driver depends on kernel interfaces that have long since disappeared, so this is a replacement built around libusb.
+I wanted to capture BIOS screens and video output from old PCs without keeping a fairly old Linux installation around to accompany them. Epiphan's original Linux driver depends on kernel interfaces that have long since disappeared, so this is a replacement built around libusb.
 
 The USB protocol and firmware loading sequence were recovered from Epiphan's old driver. The proprietary kernel module itself isn't used.
 
