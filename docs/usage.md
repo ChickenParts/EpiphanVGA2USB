@@ -22,7 +22,7 @@ From the repository root:
 ninja test driver firmware-audit
 ```
 
-The executable will be `build/vga2usb-native`. The tests are offline checks; they do not, by themselves, prove that a particular VGA mode works on physical hardware.
+The executable will be `build/vga2usb-native`. These are offline checks; physical results are listed in the [hardware test record](hardware/README.md).
 
 ## Find and start the device
 
@@ -66,7 +66,7 @@ sudo ./build/vga2usb-native --capture screen.ppm
 ffmpeg -i screen.ppm -frames:v 1 screen.png
 ```
 
-A one-shot PPM retains the captured source dimensions. It refuses unsupported or absent timing instead of inventing a frame.
+A one-shot PPM retains the captured source dimensions. Unsupported or absent timing results in an error.
 
 Mode selection defaults to automatic. You can pin two original timing presets when the source is known:
 
@@ -75,7 +75,7 @@ sudo ./build/vga2usb-native --capture screen.ppm --mode 720x400
 sudo ./build/vga2usb-native --capture screen.ppm --mode 640x480
 ```
 
-Automatic selection uses the original timing score and a table of 36 progressive modes through 1024×768. That does **not** mean every one has been tried on physical hardware. At present, 720×400 text capture is the physically qualified mode. Interlaced modes aren't supported.
+Automatic selection uses the original timing score and a table of 36 progressive modes through 1024×768. Only 720×400 text capture has a recorded physical frame test so far. Interlaced modes aren't supported.
 
 The timing response doesn't always uniquely identify horizontal geometry. The explicit presets are useful for that case.
 
@@ -96,11 +96,11 @@ To select a USB path:
 
 The viewer disables ffplay's playback keyboard/mouse shortcuts; typing at the captured machine shouldn't accidentally pause the mirror. Close the window through the window manager.
 
-The native `--stream` option writes consecutive binary PPM images to standard output. Unlike a screenshot, continuous output is normalized to a 720×480 RGB canvas (1036815 bytes per complete PPM packet) so the viewer can keep decoding when source dimensions change. A missing signal produces a black frame. This is **not** a 720×480 capture claim: the physically verified source was 720×400.
+The native `--stream` option writes consecutive binary PPM images to standard output. Unlike a screenshot, continuous output is normalized to a 720×480 RGB canvas (1036815 bytes per complete PPM packet) so the viewer can keep decoding when source dimensions change. A missing signal produces a black frame. This is the output stream format, not the source resolution.
 
-The viewer's `-framerate 60` setting controls input timestamp precision, **not** the capture frame rate. The test host measured about 8.8 complete frames per second at five capture phases. Other sources, modes, and USB paths may behave differently.
+The viewer's `-framerate 60` setting controls input timestamp precision, not capture speed. The test host measured about 8.8 complete frames per second at five capture phases. Other sources, modes, and USB paths may behave differently.
 
-Only one process can claim the capture interface. Close the live viewer before taking an independent screenshot with `--capture`. You can, of course, take screenshots of the desktop while the viewer is running.
+Only one process can claim the capture interface. Close the live viewer before taking an independent screenshot with `--capture`. Desktop screenshots can still be taken while the viewer runs.
 
 ## Recovery and current limits
 
@@ -113,7 +113,7 @@ Physical **USB unplug/reconnect** is different. Automatic recovery from unpluggi
 3. Run `--inspect` and, if needed, `--bootstrap`.
 4. Restart the viewer.
 
-If a firmware transfer fails partway through, disconnect and reconnect the device before trying again. Don't attempt guessed vendor commands or EEPROM writes to repair it.
+If a firmware transfer fails partway through, disconnect and reconnect the device before trying again. The bootstrap tool does not perform EEPROM writes.
 
 Short or incomplete image transfers are discarded. After three consecutive incomplete frames, the capture path advances its vertical phase count and tries again. The background is documented in [HOME recovery](protocol/home-recovery.md) and [receive transport](protocol/receive-transport.md).
 

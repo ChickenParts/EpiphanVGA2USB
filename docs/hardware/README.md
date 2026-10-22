@@ -18,15 +18,22 @@ The first successful frame is here:
 
 ![Phoenix BIOS captured from a 16 MHz 80386SX](images/first-capture-2026-09-28.png)
 
+## ChickenDOS splash observations
+
+The [ChickenDOS resident-shell hardware log](https://github.com/ChickenParts/ChickenDOS/blob/metachicken/docs/testing/command-resident-2026-09-29/README.md) records Epiphan screenshots of the memory diagnostics on the same 386SX-16. After the DOS memory allocation fix, the user reported that `SPLASH.EXE` ran successfully and then repeated the launches. A subsequent Epiphan screenshot showed the memory layout remained unchanged.
+
+ChickenDOS has two splash paths: CGA-compatible BIOS mode `04h` (320×200, four colors) and VGA mode `13h` (320×200, 256 colors). The splash [selects the mode at runtime](https://github.com/ChickenParts/ChickenDOS/blob/metachicken/src/demo/splash.c). The hardware log does not record the selected mode or a captured splash framebuffer, so it is not yet evidence of a verified 320×200 capture through this driver.
+
 ## Not yet physically qualified
 
+- A dimension-verified 320×200 ChickenDOS splash frame (CGA-compatible or VGA mode)
 - 640×480 graphics capture, or other progressive table modes
 - Text/graphics geometry changes on a real source
 - Repeated warm-reset or power-cycle endurance
 - Unplugging and reconnecting the **USB capture device** during a running session
 - Interlaced capture (not implemented)
 
-The physical recovery test involved a **cold power cycle of the source PC**. An attempted software reboot did not establish that the source had actually restarted. Don't treat that as warm-reset verification.
+The physical recovery test involved a cold power cycle of the source PC; warm-reset recovery has not been independently verified.
 
 ## Debugging notes
 
@@ -39,8 +46,8 @@ These are dated observations, not separate user manuals. Where later tests super
 - [Signal-loss recovery — 2026-09-29](reset-recovery-2026-09-29.md): clearing and resuming a live mirror after source power loss
 - [Viewer backpressure — 2026-09-29](viewer-backpressure-2026-09-29.md): input shortcuts and the ffplay interaction policy
 
-## Offline checks are not hardware tests
+## Offline checks
 
-The tests include simulated 720→signal-loss→640→800→1024→720 transitions, short reads, USB session cleanup, complete PPM packet boundaries, and decoding through actual FFmpeg. Those are useful regression checks but **do not verify those VGA modes on the capture device**.
+Regression tests cover simulated 720→signal-loss→640→800→1024→720 transitions, short reads, USB session cleanup, PPM packet boundaries, and decoding through FFmpeg. The simulated modes have not all been tested on the capture device.
 
 For commands and current limitations, see the [usage guide](../usage.md). For the USB transfer and timing details, see the [protocol index](../protocol/README.md).
